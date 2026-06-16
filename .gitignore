@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Vite
+*.local
+
+# Test / coverage
+coverage/
+
+# Puppeteer (screenshot script cache)
+.cache/
+
+# Backend (Node + SQL) — when implemented
+backend/node_modules/
+backend/dist/
+backend/uploads/
+backend/.env
+
+# Additional common ignores
+build/
+.vite/
+yarn-debug.log*
+yarn-error.log*
