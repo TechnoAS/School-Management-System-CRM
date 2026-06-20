@@ -46,7 +46,7 @@ This CRM covers end-to-end institute administration:
 | **Notifications** | Fee reminders, admission confirmations, course completion alerts |
 | **Settings** | Institute branding, receipt format, certificate format, role overview |
 
-> **Note:** With `VITE_API_ENABLED=true` (see `.env.local`), the React app uses the **MySQL backend** for auth and data. Run **`pnpm dev:all`** to start front-end and API together. Demo mode (offline) remains available when API is disabled.
+> **Note:** With `VITE_API_ENABLED=true` (see `.env.local`), the React app uses the **MySQL backend** for auth and data. Run **`npm run dev:all`** to start front-end and API together. Demo mode (offline) remains available when API is disabled.
 
 ---
 
@@ -252,7 +252,7 @@ Navigation is filtered automatically based on the signed-in user's role. Unautho
 | **Animations** | Motion |
 | **Toasts** | Sonner |
 | **Dates** | date-fns |
-| **Package Manager** | pnpm (monorepo: front-end + `backend/`) |
+| **Package Manager** | npm (workspaces: front-end + `backend/`) |
 
 ---
 
@@ -297,7 +297,7 @@ school-management-crm/
 │   └── types/             # Shared TypeScript types
 ├── index.html
 ├── package.json
-├── pnpm-workspace.yaml    # Monorepo: "." + "backend"
+├── package.json           # npm workspaces: "backend"
 ├── tsconfig.json
 ├── vite.config.ts         # Dev proxy: /api → localhost:5000
 └── README.md
@@ -312,7 +312,8 @@ Path alias: `@/` → `src/` (configured in both `vite.config.ts` and `tsconfig.j
 ### Prerequisites
 
 - **Node.js** 20 or later
-- **pnpm** 11 (ships with Corepack, or install via `npm install -g pnpm`)
+- **Node.js** 20 or later
+- **npm** 10+ (included with Node.js)
 
 ### Installation
 
@@ -322,13 +323,13 @@ git clone <repository-url>
 cd school-management-crm
 
 # Install dependencies
-pnpm install
+npm install
 ```
 
 ### Development
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser. Vite will pick the next available port if 3000 is in use.
@@ -339,7 +340,7 @@ The Express API runs separately on port **5000**. It is **not required** for the
 
 ```bash
 # From repo root — starts backend with tsx watch
-pnpm dev:api
+npm run dev:api
 ```
 
 Set up MySQL and `backend/.env` first — see [backend/README.md](backend/README.md). Vite proxies `/api` to `http://localhost:5000` during front-end dev.
@@ -349,7 +350,7 @@ To switch the React app to the API later, set `VITE_API_ENABLED=true` and `VITE_
 ### Production Build
 
 ```bash
-pnpm build
+npm run build
 ```
 
 Output is written to the `dist/` folder.
@@ -357,7 +358,7 @@ Output is written to the `dist/` folder.
 ### Preview Production Build
 
 ```bash
-pnpm preview
+npm run preview
 ```
 
 ---
@@ -380,16 +381,16 @@ Authentication is **client-side only** for demonstration purposes. Do not use th
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start Vite dev server with HMR (front-end) |
-| `pnpm dev:api` | Start Express backend on port 5000 |
-| `pnpm dev:all` | Start front-end + backend together |
-| `pnpm build` | Type-check and build for production |
-| `pnpm preview` | Serve the production build locally |
-| `pnpm lint` | Run ESLint across the project |
-| `pnpm lint:fix` | Auto-fix ESLint issues |
-| `pnpm format` | Format all files with Prettier |
-| `pnpm format:check` | Check formatting without writing |
-| `pnpm screenshots` | Regenerate README screenshots (requires dev server) |
+| `npm run dev` | Start Vite dev server with HMR (front-end) |
+| `npm run dev:api` | Start Express backend on port 5000 |
+| `npm run dev:all` | Start front-end + backend together |
+| `npm run build` | Type-check and build for production |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | Run ESLint across the project |
+| `npm run lint:fix` | Auto-fix ESLint issues |
+| `npm run format` | Format all files with Prettier |
+| `npm run format:check` | Check formatting without writing |
+| `npm run screenshots` | Regenerate README screenshots (requires dev server) |
 
 ---
 
@@ -399,10 +400,10 @@ Authentication is **client-side only** for demonstration purposes. Do not use th
 
 ```bash
 # Terminal 1 + 2 in one command:
-pnpm dev:all
+npm run dev:all
 ```
 
-1. Ensure MySQL is running and `backend/.env` is configured (`pnpm --filter school-management-crm-backend db:setup` once).
+1. Ensure MySQL is running and `backend/.env` is configured (`npm run db:setup --workspace=school-management-crm-backend` once).
 2. Copy `.env.example` → `.env.local` (API enabled by default).
 3. Sign in with your **backend admin** account (`ADMIN_EMAIL` / `ADMIN_PASSWORD` in `backend/.env`).
 
@@ -417,10 +418,10 @@ pnpm dev:all
 
 GitHub Actions runs on every push and pull request to `main` / `master`:
 
-1. `pnpm install`
-2. `pnpm tsc --noEmit` — TypeScript strict compilation
-3. `pnpm run lint` — ESLint
-4. `pnpm run build` — Production build verification
+1. `npm ci`
+2. `npm run typecheck` — TypeScript strict compilation
+3. `npm run lint` — ESLint
+4. `npm run build` — Production build verification
 
 Workflow file: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
@@ -443,10 +444,10 @@ Screenshots in `docs/screenshots/` can be refreshed after UI changes:
 
 ```bash
 # Terminal 1 — start the dev server
-pnpm dev
+npm run dev
 
 # Terminal 2 — capture screenshots (uses Chrome on Windows by default)
-pnpm screenshots
+npm run screenshots
 ```
 
 Optional environment variables:

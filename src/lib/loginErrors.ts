@@ -10,7 +10,7 @@ export function getLoginErrorMessage(err: unknown): string {
       return "Invalid email or password. Check your credentials and try again.";
     }
     if (err.status === 0 || err.message === "Failed to fetch") {
-      return "Cannot reach the server. Start the API with pnpm dev:api or pnpm dev:all.";
+      return "Cannot reach the server. Start the API with npm run dev:api or npm run dev:all.";
     }
     if (err.message && err.message !== "[object Object]") {
       return err.message;
@@ -19,7 +19,7 @@ export function getLoginErrorMessage(err: unknown): string {
   }
 
   if (err instanceof TypeError && err.message === "Failed to fetch") {
-    return "Cannot reach the server. Start the API with pnpm dev:api or pnpm dev:all.";
+    return "Cannot reach the server. Start the API with npm run dev:api or npm run dev:all.";
   }
 
   if (err instanceof Error && err.message) {

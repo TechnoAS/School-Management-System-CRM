@@ -228,7 +228,7 @@ export function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
               </p>
               <p className="text-[11px] text-muted-foreground/80 mt-2 leading-relaxed">
                 API not running? From the project root run{" "}
-                <span className="font-mono text-foreground/70">pnpm dev:all</span>.
+                <span className="font-mono text-foreground/70">npm run dev:all</span>.
               </p>
             </div>
           ) : (

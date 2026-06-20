@@ -14,28 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: "npm"
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Run tests
-        run: pnpm test
+        run: npm test
 
       - name: Check TypeScript compilation
-        run: pnpm tsc --noEmit
+        run: npm run typecheck
 
       - name: Run ESLint
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Verify production build
-        run: pnpm run build
+        run: npm run build

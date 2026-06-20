@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SectionHeader } from "@/components/shared";
-import { FMT, formatCurrentDateTime, getTimeGreeting } from "@/lib/utils";
+import { formatCurrentDateTime, getTimeGreeting } from "@/lib/utils";
 import { useCurrentDateTime } from "@/hooks/useCurrentDateTime";
 import {
   buildEnrollmentTrend,

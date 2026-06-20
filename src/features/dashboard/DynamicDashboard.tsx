@@ -72,7 +72,7 @@ export function DynamicDashboard({ layout, data, editMode, onLayoutChange }: Pro
     <>
       {statWidgets.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-5">
-          {statWidgets.map((widget, index) => (
+          {statWidgets.map((widget) => (
             <div key={widget.id} className={widget.visible ? "" : "opacity-50"}>
               {renderWidget(widget, layout.widgets.indexOf(widget), layout.widgets)}
             </div>
