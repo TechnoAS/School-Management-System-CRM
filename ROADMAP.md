@@ -24,7 +24,7 @@ school-management-crm/
 
 | Port | Service |
 |------|---------|
-| 3000 | Front-end (`pnpm dev`) |
+| 3000 | Front-end (`npm run dev` in `frontend/`) |
 | 5000 | Backend API (`backend/` — when built) |
 
 ---
@@ -120,7 +120,7 @@ Everything else depends on a single, consistent data source. **Types align with 
 - [x] **11.2** Unit tests (utils, roles)
 - [x] **11.3** Login flow test
 - [x] **11.4** Student CRUD test
-- [x] **11.5** `pnpm test` in CI
+- [x] **11.5** `npm test` in CI
 
 ---
 
@@ -139,7 +139,7 @@ Prepare front-end to talk to Node backend. **Scaffold already created** — fini
 - [x] **B.9** `useApiMode()` hook — switch Zustand vs API via `VITE_API_ENABLED`
 - [ ] **B.10** Add React Query + provider (when first real endpoint exists)
 
-> **Tip:** API mode is enabled via `.env.local` (`VITE_API_ENABLED=true`). Run `pnpm dev:all` for front-end + backend together.
+> **Tip:** API mode is enabled via `.env.local` (`VITE_API_ENABLED=true`). Run the frontend and backend in separate terminals (`npm run dev` in each folder).
 
 ---
 
@@ -149,14 +149,14 @@ You implement this in `backend/`. Follow `backend/README.md`, `docs/API.md`, and
 
 ## Phase C1 — Project setup
 
-- [ ] **C1.1** `backend/package.json` (Express/Fastify + TypeScript)
-- [ ] **C1.2** `backend/tsconfig.json`
+- [ ] **C1.1** `backend/package.json` (Express + JavaScript)
+- [x] **C1.2** ~~`backend/tsconfig.json`~~ (JavaScript — no build step)
 - [ ] **C1.3** `backend/.env` from `.env.example`
 - [ ] **C1.4** SQL connection pool (`src/db/pool.ts`)
 - [ ] **C1.5** Choose ORM: Prisma / Drizzle / raw `pg`
 - [ ] **C1.6** Initial migration (`users`, `institute_settings`)
 - [ ] **C1.7** Seed script mirroring `src/constants/data.ts`
-- [ ] **C1.8** `pnpm dev:api` script at repo root
+- [ ] **C1.8** Document `npm run dev` in `backend/` for local API
 
 ## Phase C2 — Auth & middleware
 

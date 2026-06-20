@@ -1,0 +1,22 @@
+# Build outputs
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Lock files (auto-managed)
+package-lock.json
+yarn.lock
+
+# Generated / tooling
+*.py
+default_shadcn_theme.css
+
+# Binary / non-JS assets
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.csv

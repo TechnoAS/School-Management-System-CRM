@@ -1,4 +1,4 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 
 # Build output
@@ -13,7 +13,6 @@ dist/
 logs/
 *.log
 npm-debug.log*
-pnpm-debug.log*
 
 # Editor / OS
 .DS_Store
@@ -26,6 +25,7 @@ Thumbs.db
 
 # Vite
 *.local
+.vite/
 
 # Test / coverage
 coverage/
@@ -33,7 +33,14 @@ coverage/
 # Puppeteer (screenshot script cache)
 .cache/
 
-# Backend (Node + SQL) — when implemented
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Backend
 backend/node_modules/
 backend/dist/
 backend/uploads/
@@ -41,6 +48,5 @@ backend/.env
 
 # Additional common ignores
 build/
-.vite/
 yarn-debug.log*
 yarn-error.log*

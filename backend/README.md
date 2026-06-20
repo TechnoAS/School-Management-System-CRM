@@ -1,4 +1,4 @@
-# Backend — Node.js + TypeScript + MySQL (Express)
+# Backend — Node.js + JavaScript + MySQL (Express)
 
 > **Status:** Functional Express API with MySQL. Auth, CRUD modules, audit logging, and rate limiting are implemented. The front-end still runs standalone (Zustand persist) until wired to this API — see [Front-end Integration](#front-end-integration).
 
@@ -27,9 +27,9 @@
 |---|---|---|
 | Runtime | Node.js 20 LTS | Pin version using `.nvmrc` and `engines` |
 | Framework | Express | Simple, lightweight, standard industry choice |
-| Language | TypeScript 5+ | Strict type checking (`strict: true`), clean typing |
+| Language | JavaScript (ES modules) | Native Node.js ESM; Zod for runtime validation |
 | Database | MySQL 8.0+ | ACID-compliant relational DB (Free tier available on Clever Cloud, Aiven, or local) |
-| ORM / Queries | `mysql2` (parameterized) | Raw SQL migrations in `sql/`; typed row helpers in `src/shared/db/` |
+| ORM / Queries | `mysql2` (parameterized) | Raw SQL migrations in `sql/`; query helpers in `src/shared/db/` |
 | Auth | Short-lived JWT (15 min) + Refresh Token (7 d, HttpOnly cookie) | Secure session rotation strategy |
 | Password Hashing | bcrypt | Cost factor **12** minimum |
 | Validation | Zod | Matches front-end schemas; strips unknown fields on request payload |
@@ -51,7 +51,6 @@ backend/
 ├── .env.example                  # Safe template — no real secrets
 ├── .nvmrc                        # Pins Node.js version
 ├── package.json                  # Dependencies and scripts
-├── tsconfig.json                 # TypeScript compiler configuration
 ├── README.md                     # Backend developer guide
 ├── SECURITY.md                   # Threat model & security instructions
 │
@@ -59,21 +58,21 @@ backend/
 │   ├── 001_init.sql
 │   └── seed_sample_data.sql
 │
-├── vitest.config.ts              # Test runner configuration
+├── vitest.config.js              # Test runner configuration
 │
 └── src/
-    ├── server.ts                 # App entry point (PORT binding & graceful shutdown)
-    ├── app.ts                    # Express instance configuration & global middleware registration
+    ├── server.js                 # App entry point (PORT binding & graceful shutdown)
+    ├── app.js                    # Express instance configuration & global middleware registration
     │
     ├── config/                   # Global configuration & loaders
-    │   ├── env.ts                # Environment validation (Zod)
-    │   ├── database.ts           # MySQL connection pool initialization
-    │   └── logger.ts             # Winston logger (respects LOG_LEVEL)
+    │   ├── env.js                # Environment validation (Zod)
+    │   ├── database.js           # MySQL connection pool initialization
+    │   └── logger.js             # Winston logger (respects LOG_LEVEL)
     │
     ├── middleware/               # App-wide global middleware
-    │   ├── auth.middleware.ts    # JWT parsing & route authentication
-    │   ├── error.middleware.ts   # Safe centralized error formats (hides stack traces)
-    │   └── rate-limit.ts         # Global API request caps
+    │   ├── auth.middleware.js    # JWT parsing & route authentication
+    │   ├── error.middleware.js   # Safe centralized error formats (hides stack traces)
+    │   └── rate-limit.js         # Global API request caps
     │
     ├── modules/                  # Feature Modules (Vertical Slices)
     │   ├── auth/                 # Authentication & Session Module
@@ -92,17 +91,14 @@ backend/
     │
     ├── __tests__/                # Vitest integration/unit tests
     │
-    └── shared/                   # Generic helpers, interfaces & types shared across modules
+    └── shared/                   # Generic helpers shared across modules
         ├── db/
-        │   └── query.ts          # Typed mysql2 query helpers
+        │   └── query.js          # mysql2 query helpers
         ├── errors/
-        │   └── app-error.ts
-        ├── utils/
-        │   ├── crypto.ts         # JWT & hashing utilities
-        │   └── jwt-errors.ts     # JWT error classification
-        └── types/
-            ├── db.ts             # MySQL row interfaces
-            └── express.d.ts      # Express Request extensions
+        │   └── app-error.js
+        └── utils/
+            ├── crypto.js         # JWT & hashing utilities
+            └── jwt-errors.js     # JWT error classification
 ```
 
 ---
@@ -255,7 +251,7 @@ POST /api/auth/reset-password    → Verify token, hash new password, revoke ref
 
 The setup account is created as **`super_admin`** (full access plus dashboard layout editing). `super_admin` is treated as `admin` for all existing route guards.
 
-Routes use `requireAuth` and `requireRoles(...)` middleware. Fine-grained per-route guards vary by module — see each `*.routes.ts` file.
+Routes use `requireAuth` and `requireRoles(...)` middleware. Fine-grained per-route guards vary by module — see each `*.routes.js` file.
 
 | Permission | Super Admin | Admin | Staff | Faculty |
 |---|:---:|:---:|:---:|:---:|
@@ -384,11 +380,18 @@ npm run db:setup
 npm run dev               # starts Express on http://localhost:5000
 ```
 
-From root project directory:
+From the frontend directory:
 
 ```bash
-pnpm dev          # frontend :3000
-pnpm dev:api      # backend :5000
+cd frontend
+npm run dev       # frontend :3000
+```
+
+From the backend directory:
+
+```bash
+cd backend
+npm run dev       # backend :5000
 ```
 
 ---
@@ -397,14 +400,11 @@ pnpm dev:api      # backend :5000
 
 | Script | Description |
 |---|---|
-| `npm run dev` | Starts app locally with `tsx watch` |
-| `npm run build` | Compiles TypeScript into `dist/` |
-| `npm start` | Runs production build: `node dist/server.js` |
+| `npm run dev` | Starts app locally with `node --watch` (auto-reload on save) |
+| `npm start` | Runs the server: `node src/server.js` |
 | `npm test` | Runs Vitest test suite once |
 | `npm run db:setup` | Interactive setup: institute name, your admin password, database, schema, optional sample data |
 | `npm run db:reset-admin` | Apply a new `ADMIN_PASSWORD` from `.env` |
-| `npm run lint` | ESLint analysis |
-| `npm run typecheck` | Type-check without emit (`tsc --noEmit`) |
 
 ### Database setup
 
@@ -425,15 +425,3 @@ npm test
 ```
 
 Tests live in `src/__tests__/`. They cover auth refresh error handling, the error middleware, and basic route responses. Vitest mocks the database pool so tests do not require a running MySQL instance.
-
----
-
-## Monorepo
-
-Configured in `pnpm-workspace.yaml`:
-
-```yaml
-packages:
-  - "."
-  - "backend"
-```

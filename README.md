@@ -339,8 +339,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Vite will p
 The Express API runs separately on port **5000**. It is **not required** for the demo UI.
 
 ```bash
-# From repo root — starts backend with tsx watch
-npm run dev:api
+cd backend
+npm install
+npm run dev
 ```
 
 Set up MySQL and `backend/.env` first — see [backend/README.md](backend/README.md). Vite proxies `/api` to `http://localhost:5000` during front-end dev.
