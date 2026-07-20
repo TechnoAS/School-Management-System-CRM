@@ -17,5 +17,6 @@ export const createStudentSchema = z.object({
     dob: v.isoDate('Date of birth').optional().nullable(),
     grade: v.gradeOptional(),
     photoUrl: z.string().optional().nullable(),
+    extraData: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 export const updateStudentSchema = createStudentSchema.partial().omit({ id: true });

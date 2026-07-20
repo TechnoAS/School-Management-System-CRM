@@ -11,6 +11,7 @@ import type {
   ExamMarkRecord,
   InstituteSettings,
 } from "@/types";
+import { DEFAULT_ADMISSION_FORM } from "@/lib/defaultAdmissionForm";
 
 /** Offline demo seed data — used only when VITE_API_ENABLED=false */
 export const INIT_STUDENTS: Student[] = [
@@ -181,6 +182,7 @@ export const INIT_INSTITUTE_SETTINGS: InstituteSettings = {
     bodyText:
       "This is to certify that [Student Name] has successfully completed the [Course Name] program with distinction.",
   },
+  admissionForm: DEFAULT_ADMISSION_FORM,
 };
 
 /** @deprecated Use INIT_EXAM_MARKS — kept for imports during transition */

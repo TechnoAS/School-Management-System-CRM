@@ -1,11 +1,16 @@
 import { getKPIs, getEnrollmentTrend, getFeeTrend, getTodayClasses, getCourseEnrollment, getStudentsReport, getAdmissionsReport, getFeesReport, getAttendanceReportAll, getFacultyReport, } from './dashboard.service.js';
 import { NotFoundError } from '../../shared/errors/app-error.js';
-export async function stats(_req, res, next) {
+export async function stats(req, res, next) {
     try {
         const kpis = await getKPIs();
+        // Financial fields are restricted to admin and staff only
+        const isFaculty = req.user?.role === 'faculty';
+        const data = isFaculty
+            ? (({ feesDue, feesCollected, totalRevenue, studentsWithFeesDue, ...safe }) => safe)(kpis)
+            : kpis;
         res.status(200).json({
             success: true,
-            data: kpis,
+            data,
         });
     }
     catch (error) {

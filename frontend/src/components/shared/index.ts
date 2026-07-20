@@ -12,3 +12,4 @@ export * from "./ConfirmDialog";
 export * from "./LogoutDialog";
 export * from "./EmptyState";
 export * from "./PageSkeleton";
+export * from "./ImageCropDialog";

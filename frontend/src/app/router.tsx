@@ -25,7 +25,9 @@ import { onAuthExpired } from "@/api/client";
 const LoginPage = lazy(() => import("@/features/auth/LoginPage"));
 const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage"));
 const StudentsPage = lazy(() => import("@/features/students/StudentsPage"));
+const StudentAdmissionPage = lazy(() => import("@/features/students/StudentAdmissionPage"));
 const CoursesPage = lazy(() => import("@/features/courses/CoursesPage"));
+const CourseFormPage = lazy(() => import("@/features/courses/CourseFormPage"));
 const BatchesPage = lazy(() => import("@/features/batches/BatchesPage"));
 const AttendancePage = lazy(() =>
   import("@/features/attendance/AttendancePage")
@@ -152,6 +154,21 @@ function ProtectedLayout() {
             }
           />
           <Route
+            path="/students/new"
+            element={
+              <RoleGuard moduleId="students">
+                <ErrorBoundary>
+                  <StudentAdmissionPage
+                    students={students}
+                    setStudents={setStudents}
+                    courses={courses}
+                    batches={batches}
+                  />
+                </ErrorBoundary>
+              </RoleGuard>
+            }
+          />
+          <Route
             path="/students"
             element={
               <RoleGuard moduleId="students">
@@ -162,6 +179,26 @@ function ProtectedLayout() {
                     courses={courses}
                     batches={batches}
                   />
+                </ErrorBoundary>
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/courses/new"
+            element={
+              <RoleGuard moduleId="courses">
+                <ErrorBoundary>
+                  <CourseFormPage courses={courses} setCourses={setCourses} />
+                </ErrorBoundary>
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/courses/:id/edit"
+            element={
+              <RoleGuard moduleId="courses">
+                <ErrorBoundary>
+                  <CourseFormPage courses={courses} setCourses={setCourses} />
                 </ErrorBoundary>
               </RoleGuard>
             }

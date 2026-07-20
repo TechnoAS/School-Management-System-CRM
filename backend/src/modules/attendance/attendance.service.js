@@ -30,9 +30,15 @@ export async function upsertAttendance(data, markedBy) {
         connection.release();
     }
 }
-/** Flat attendance rows for sync (last N months). */
-export async function listAttendanceRecords(months = 12) {
+/** Flat attendance rows for sync (last N months).
+ * When facultyId is supplied only records from that faculty's batches are returned. */
+export async function listAttendanceRecords(months = 12, facultyId = null) {
     const safeMonths = Math.min(Math.max(Number(months) || 12, 1), 24);
+    const params = [safeMonths];
+    const facultyJoin = facultyId
+        ? 'AND b.faculty_id = ?'
+        : '';
+    if (facultyId) params.push(facultyId);
     const [rows] = await pool.query(`SELECT ar.student_id AS studentId,
             ar.batch_id AS batchId,
             b.name AS batchName,
@@ -41,7 +47,8 @@ export async function listAttendanceRecords(months = 12) {
      FROM attendance_records ar
      INNER JOIN batches b ON b.id = ar.batch_id
      WHERE ar.record_date >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-     ORDER BY ar.record_date DESC, ar.student_id ASC`, [safeMonths]);
+       ${facultyJoin}
+     ORDER BY ar.record_date DESC, ar.student_id ASC`, params);
     return rows;
 }
 export async function getAttendanceReport(batchId, month) {

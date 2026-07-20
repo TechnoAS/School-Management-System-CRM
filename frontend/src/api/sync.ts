@@ -13,6 +13,7 @@ import {
 import { ApiError } from "./client";
 import type { Batch, Course, ExamMarkRecord } from "@/types";
 import type { MonthlyAttendanceRow } from "@/store/attendanceHelpers";
+import { DEFAULT_ADMISSION_FORM } from "@/lib/defaultAdmissionForm";
 
 export interface SyncedAppData {
   courses: Awaited<ReturnType<typeof coursesService.list>>;
@@ -129,7 +130,7 @@ function enrichBatchesWithCounts(batches: Batch[], students: SyncedAppData["stud
 }
 
 export async function syncAppData(role: SyncRole): Promise<SyncedAppData> {
-  const [courses, batches, students, faculty, payments, exams, certificates, notifs, settings] =
+  const [courses, batches, students, faculty, payments, exams, certificates, notifs, settings, admissionForm] =
     await Promise.all([
       optionalByRole(["admin", "staff", "super_admin"], role, () => coursesService.list(), []),
       optionalByRole(["admin", "staff", "super_admin"], role, () => batchesService.list(), []),
@@ -140,6 +141,7 @@ export async function syncAppData(role: SyncRole): Promise<SyncedAppData> {
       optionalByRole(["admin", "super_admin"], role, () => certificatesService.list(), []),
       notificationsService.list(),
       optionalByRole(["admin", "staff", "faculty", "super_admin"], role, () => settingsService.getInstitute(), EMPTY_SETTINGS),
+      optionalByRole(["admin", "staff", "super_admin"], role, () => settingsService.getAdmissionForm(), DEFAULT_ADMISSION_FORM),
     ]);
 
   const enrichedBatches = enrichBatchesWithCounts(batches, students);
@@ -158,7 +160,7 @@ export async function syncAppData(role: SyncRole): Promise<SyncedAppData> {
     exams,
     certificates,
     notifs,
-    settings,
+    settings: { ...settings, admissionForm },
     attendanceRecords,
     examMarks,
   };

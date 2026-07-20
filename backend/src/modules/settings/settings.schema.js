@@ -36,3 +36,22 @@ export const dashboardWidgetSchema = z.object({
 export const pageLayoutSchema = z.object({
     widgets: z.array(dashboardWidgetSchema).max(40),
 });
+export const admissionFieldSchema = z.object({
+    id: z.string().min(1).max(64),
+    label: z.string().min(1).max(120),
+    placeholder: z.string().max(200).optional(),
+    type: z.enum(['text', 'textarea', 'date', 'number', 'select']),
+    required: z.boolean().default(false),
+    options: z.array(z.string().max(80)).max(20).optional(),
+});
+export const admissionDocumentSlotSchema = z.object({
+    id: z.string().min(1).max(64),
+    label: z.string().min(1).max(120),
+    description: z.string().max(300).optional(),
+    required: z.boolean().default(false),
+    accept: z.string().max(120).optional(),
+});
+export const admissionFormConfigSchema = z.object({
+    customFields: z.array(admissionFieldSchema).max(30),
+    documentSlots: z.array(admissionDocumentSlotSchema).max(15),
+});

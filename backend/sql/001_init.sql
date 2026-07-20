@@ -94,6 +94,11 @@ CREATE TABLE courses (
   fees        DECIMAL(12, 2) NOT NULL DEFAULT 0,
   description TEXT           NULL,
   status      VARCHAR(20)    NOT NULL DEFAULT 'Active',
+  logo_url    TEXT           NULL,
+  banner_url  TEXT           NULL,
+  start_date  DATE           NULL,
+  end_date    DATE           NULL,
+  extra_data  JSON           NULL,
   created_at  TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -140,6 +145,7 @@ CREATE TABLE students (
   dob             DATE           NULL,
   grade           VARCHAR(10)    NULL,
   photo_url       TEXT           NULL,
+  extra_data      JSON           NULL,
   created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_student_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE RESTRICT,
   CONSTRAINT fk_student_batch  FOREIGN KEY (batch_id)  REFERENCES batches(id)  ON DELETE SET NULL

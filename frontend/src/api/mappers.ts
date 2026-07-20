@@ -13,6 +13,8 @@ import type {
   InstituteSettings,
   User,
 } from "@/types";
+import type { AdmissionFormConfig, StudentExtraData } from "@/types/admissionForm";
+import { DEFAULT_ADMISSION_FORM } from "@/lib/defaultAdmissionForm";
 
 type Row = Record<string, unknown>;
 
@@ -56,6 +58,26 @@ export function mapUser(row: Row): User {
   };
 }
 
+function parseJsonColumn<T>(value: unknown, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return value as T;
+}
+
+function mapExtraData(row: Row): StudentExtraData | undefined {
+  const raw = row.extra_data ?? row.extraData;
+  if (!raw) return undefined;
+  const parsed = parseJsonColumn<StudentExtraData>(raw, {});
+  if (!parsed.customFields && !parsed.documents) return undefined;
+  return parsed;
+}
+
 export function mapStudent(row: Row): Student {
   return {
     id: str(row.id),
@@ -76,10 +98,20 @@ export function mapStudent(row: Row): Student {
     dob: dateStr(row.dob),
     grade: str(row.grade, "-"),
     photo: row.photo_url || row.photoUrl ? str(row.photo_url ?? row.photoUrl) : undefined,
+    extraData: mapExtraData(row),
   };
 }
 
 export function mapCourse(row: Row, stats?: { batches?: number; enrolled?: number }): Course {
+  const extraRaw = row.extra_data ?? row.extraData;
+  let extraData: Course["extraData"];
+  if (extraRaw) {
+    try {
+      extraData = typeof extraRaw === "string" ? JSON.parse(extraRaw) : (extraRaw as Course["extraData"]);
+    } catch {
+      extraData = undefined;
+    }
+  }
   return {
     id: str(row.id),
     name: str(row.name),
@@ -89,6 +121,11 @@ export function mapCourse(row: Row, stats?: { batches?: number; enrolled?: numbe
     status: str(row.status, "Active"),
     batches: stats?.batches ?? num(row.batches),
     enrolled: stats?.enrolled ?? num(row.enrolled),
+    startDate: dateStr(row.start_date ?? row.startDate) || undefined,
+    endDate: dateStr(row.end_date ?? row.endDate) || undefined,
+    logo: row.logo_url || row.logoUrl ? str(row.logo_url ?? row.logoUrl) : undefined,
+    banner: row.banner_url || row.bannerUrl ? str(row.banner_url ?? row.bannerUrl) : undefined,
+    extraData,
   };
 }
 
@@ -199,6 +236,33 @@ export function mapExamMark(row: Row, examId = "", maxMarks = 100): ExamMarkReco
   };
 }
 
+export function mapAdmissionFormConfig(raw: unknown): AdmissionFormConfig {
+  if (!raw || typeof raw !== "object") return DEFAULT_ADMISSION_FORM;
+  const row = raw as Record<string, unknown>;
+  const customFields = Array.isArray(row.customFields)
+    ? row.customFields.map((f: Record<string, unknown>) => ({
+        id: str(f.id),
+        label: str(f.label),
+        placeholder: f.placeholder ? str(f.placeholder) : undefined,
+        type: (["text", "textarea", "date", "number", "select"].includes(str(f.type))
+          ? str(f.type)
+          : "text") as AdmissionFormConfig["customFields"][0]["type"],
+        required: Boolean(f.required),
+        options: Array.isArray(f.options) ? f.options.map(o => str(o)) : undefined,
+      }))
+    : [];
+  const documentSlots = Array.isArray(row.documentSlots)
+    ? row.documentSlots.map((d: Record<string, unknown>) => ({
+        id: str(d.id),
+        label: str(d.label),
+        description: d.description ? str(d.description) : undefined,
+        required: Boolean(d.required),
+        accept: d.accept ? str(d.accept) : undefined,
+      }))
+    : DEFAULT_ADMISSION_FORM.documentSlots;
+  return { customFields, documentSlots };
+}
+
 export function mapInstituteSettings(
   row: Row,
   receipt?: Row,
@@ -268,6 +332,7 @@ export function studentToApi(
     photoUrl: data.photo?.startsWith("http") || data.photo?.startsWith("/")
       ? data.photo
       : null,
+    extraData: data.extraData ?? null,
   };
 }
 
@@ -279,6 +344,11 @@ export function courseToApi(data: Omit<Course, "id" | "batches" | "enrolled">, i
     fees: data.fees,
     description: data.description,
     status: data.status,
+    startDate: data.startDate || null,
+    endDate: data.endDate || null,
+    logoUrl: data.logo?.startsWith("http") || data.logo?.startsWith("/") ? data.logo : null,
+    bannerUrl: data.banner?.startsWith("http") || data.banner?.startsWith("/") ? data.banner : null,
+    extraData: data.extraData ?? null,
   };
 }
 

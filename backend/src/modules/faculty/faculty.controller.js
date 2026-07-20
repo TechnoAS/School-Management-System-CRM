@@ -4,6 +4,13 @@ import { getAllFaculty, getFacultyById, createFaculty, updateFaculty, deleteFacu
 import { NotFoundError, UnauthorizedError, ValidationError } from '../../shared/errors/app-error.js';
 import { createAuditLog } from '../audit/audit.service.js';
 import { photoUpload, validateMagicBytes } from '../../shared/utils/photo-upload.js';
+import {
+    deletePhotoFromStorageByKey,
+    deleteStoredAssetByUrl,
+    isR2StorageEnabled,
+    uploadFileToStorage,
+} from '../../shared/utils/object-storage.js';
+import { logger } from '../../config/logger.js';
 export const upload = photoUpload;
 export async function listFaculty(_req, res, next) {
     try {
@@ -119,7 +126,6 @@ export async function markAttendance(req, res, next) {
         }
         const { id } = req.params;
         const { status, date } = req.body;
-        // We do not have a separate faculty attendance table in db, so we save to audit logs as a record
         await createAuditLog({
             userId: req.user.id,
             action: 'FACULTY_ATTENDANCE_MARK',
@@ -146,7 +152,7 @@ export async function getSalarySlip(req, res, next) {
             throw new NotFoundError(`Faculty with ID "${id}" not found`);
         }
         const basicSalary = parseFloat(faculty.salary) || 0;
-        const deductions = Math.round(basicSalary * 0.05); // 5% standard tax/provident fund deduction
+        const deductions = Math.round(basicSalary * 0.05);
         const netPaid = basicSalary - deductions;
         res.status(200).json({
             success: true,
@@ -166,6 +172,7 @@ export async function getSalarySlip(req, res, next) {
     }
 }
 export async function uploadPhoto(req, res, next) {
+    let uploadedStorageKey = null;
     try {
         if (!req.user) {
             throw new UnauthorizedError();
@@ -183,8 +190,28 @@ export async function uploadPhoto(req, res, next) {
             fs.unlinkSync(req.file.path);
             throw new ValidationError('File upload rejected: magic byte validation failed');
         }
-        const photoUrl = `/uploads/${req.file.filename}`;
+        const previousPhotoUrl = faculty.photo_url || null;
+        let photoUrl = `/uploads/${req.file.filename}`;
+        if (isR2StorageEnabled()) {
+            const uploaded = await uploadFileToStorage(req.file.path, req.file.mimetype, req.file.originalname, 'faculty/photos');
+            if (!uploaded) {
+                throw new ValidationError('Cloud storage upload failed');
+            }
+            uploadedStorageKey = uploaded.key;
+            photoUrl = uploaded.url;
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        }
         const updated = await updateFaculty(id, { photoUrl });
+        if (previousPhotoUrl && previousPhotoUrl !== photoUrl) {
+            try {
+                await deleteStoredAssetByUrl(previousPhotoUrl);
+            }
+            catch (cleanupError) {
+                logger.warn('Failed to delete previous faculty photo', { cleanupError });
+            }
+        }
         await createAuditLog({
             userId: req.user.id,
             action: 'FACULTY_PHOTO_UPLOAD',
@@ -200,6 +227,14 @@ export async function uploadPhoto(req, res, next) {
         });
     }
     catch (error) {
+        if (uploadedStorageKey) {
+            try {
+                await deletePhotoFromStorageByKey(uploadedStorageKey);
+            }
+            catch (cleanupError) {
+                logger.warn('Failed to rollback uploaded faculty photo', { cleanupError });
+            }
+        }
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }

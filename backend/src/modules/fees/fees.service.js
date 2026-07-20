@@ -1,5 +1,5 @@
 import { pool } from '../../config/database.js';
-import { ConflictError, NotFoundError } from '../../shared/errors/app-error.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/app-error.js';
 export async function getDueStudents() {
     const [rows] = await pool.query(`
     SELECT s.id as studentId, s.name as studentName, s.phone, s.email,
@@ -49,6 +49,14 @@ export async function collectFee(data, createdBy) {
         const student = students[0];
         if (!student) {
             throw new NotFoundError(`Student with ID "${data.studentId}" not found`);
+        }
+        // Guard: prevent fees_paid from exceeding fees_total
+        const newTotal = parseFloat(student.fees_paid) + parseFloat(data.amount);
+        if (newTotal > parseFloat(student.fees_total)) {
+            throw new ValidationError(
+                `Payment of ${data.amount} would exceed the total fee of ${student.fees_total}. ` +
+                `Outstanding balance is ${(student.fees_total - student.fees_paid).toFixed(2)}.`
+            );
         }
         // 2. Generate unique receipt ID
         let receiptId = '';

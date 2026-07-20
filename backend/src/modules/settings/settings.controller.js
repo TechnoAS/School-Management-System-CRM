@@ -1,22 +1,17 @@
-import path from 'path';
 import fs from 'fs';
-import { updateInstituteSchema, updateReceiptConfigSchema, updateCertificateConfigSchema, pageIdSchema, pageLayoutSchema } from './settings.schema.js';
-import { getSettings, updateInstituteSettings, updateReceiptSettings, updateCertificateSettings, getPageLayout, updatePageLayout, } from './settings.service.js';
-import { UnauthorizedError } from '../../shared/errors/app-error.js';
+import { updateInstituteSchema, updateReceiptConfigSchema, updateCertificateConfigSchema, pageIdSchema, pageLayoutSchema, admissionFormConfigSchema, } from './settings.schema.js';
+import { getSettings, updateInstituteSettings, updateReceiptSettings, updateCertificateSettings, getPageLayout, updatePageLayout, getAdmissionFormConfig, updateAdmissionFormConfig, } from './settings.service.js';
+import { UnauthorizedError, ValidationError } from '../../shared/errors/app-error.js';
 import { createAuditLog } from '../audit/audit.service.js';
-import { env } from '../../config/env.js';
-/** Delete an old upload file from disk if it exists and belongs to the /uploads/ folder. */
-function deleteOldLogo(logoUrl) {
-    if (!logoUrl || !logoUrl.startsWith('/uploads/'))
-        return;
-    const filename = path.basename(logoUrl);
-    const filePath = path.join(path.resolve(env.UPLOAD_DIR), filename);
-    fs.unlink(filePath, (err) => {
-        if (err && err.code !== 'ENOENT') {
-            console.warn('[settings] Failed to delete old logo:', filePath, err.message);
-        }
-    });
-}
+import { validateMagicBytes } from '../../shared/utils/photo-upload.js';
+import {
+    deletePhotoFromStorageByKey,
+    deleteStoredAssetByUrl,
+    isR2StorageEnabled,
+    uploadLogoToStorage,
+} from '../../shared/utils/object-storage.js';
+import { logger } from '../../config/logger.js';
+
 export async function getBranding(_req, res, next) {
     try {
         const settings = await getSettings();
@@ -45,22 +40,51 @@ export async function getInstitute(_req, res, next) {
     }
 }
 export async function updateInstitute(req, res, next) {
+    let uploadedStorageKey = null;
     try {
         if (!req.user) {
             throw new UnauthorizedError();
         }
         const data = updateInstituteSchema.parse(req.body);
-        // Read the current logo URL BEFORE we overwrite it
         const oldSettings = await getSettings();
         const oldLogoUrl = oldSettings?.logo_url ?? oldSettings?.logoUrl ?? '';
         if (req.file) {
-            // A new file was uploaded — delete the old one from disk
-            deleteOldLogo(oldLogoUrl);
-            data.logoUrl = `/uploads/${req.file.filename}`;
+            const isValid = validateMagicBytes(req.file.path);
+            if (!isValid) {
+                fs.unlinkSync(req.file.path);
+                throw new ValidationError('File upload rejected: magic byte validation failed');
+            }
+            let logoUrl = `/uploads/${req.file.filename}`;
+            if (isR2StorageEnabled()) {
+                const uploaded = await uploadLogoToStorage(req.file.path, req.file.mimetype, req.file.originalname);
+                if (!uploaded) {
+                    throw new ValidationError('Cloud storage upload failed');
+                }
+                uploadedStorageKey = uploaded.key;
+                logoUrl = uploaded.url;
+                if (fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
+            }
+            data.logoUrl = logoUrl;
+            if (oldLogoUrl && oldLogoUrl !== logoUrl) {
+                try {
+                    await deleteStoredAssetByUrl(oldLogoUrl);
+                }
+                catch (cleanupError) {
+                    logger.warn('Failed to delete previous logo asset', { cleanupError });
+                }
+            }
         }
         else if (data.logoUrl === '' || data.logoUrl === null) {
-            // Logo was explicitly cleared — delete the old file from disk
-            deleteOldLogo(oldLogoUrl);
+            if (oldLogoUrl) {
+                try {
+                    await deleteStoredAssetByUrl(oldLogoUrl);
+                }
+                catch (cleanupError) {
+                    logger.warn('Failed to delete removed logo asset', { cleanupError });
+                }
+            }
             data.logoUrl = '';
         }
         const updated = await updateInstituteSettings(data);
@@ -80,6 +104,17 @@ export async function updateInstitute(req, res, next) {
         });
     }
     catch (error) {
+        if (uploadedStorageKey) {
+            try {
+                await deletePhotoFromStorageByKey(uploadedStorageKey);
+            }
+            catch (cleanupError) {
+                logger.warn('Failed to rollback uploaded logo', { cleanupError });
+            }
+        }
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
         next(error);
     }
 }
@@ -170,6 +205,45 @@ export async function getPageLayoutHandler(req, res, next) {
         res.status(200).json({
             success: true,
             data: layout,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+}
+export async function getAdmissionFormHandler(_req, res, next) {
+    try {
+        const config = await getAdmissionFormConfig();
+        res.status(200).json({
+            success: true,
+            data: config,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+}
+export async function updateAdmissionFormHandler(req, res, next) {
+    try {
+        if (!req.user) {
+            throw new UnauthorizedError();
+        }
+        const config = admissionFormConfigSchema.parse(req.body);
+        const before = await getAdmissionFormConfig();
+        const updated = await updateAdmissionFormConfig(config);
+        await createAuditLog({
+            userId: req.user.id,
+            action: 'SETTINGS_ADMISSION_FORM_UPDATE',
+            entity: 'institute_settings',
+            entityId: 'admission-form',
+            beforeData: before,
+            afterData: updated,
+            ipAddress: req.ip || null,
+            userAgent: req.headers['user-agent'] || null,
+        });
+        res.status(200).json({
+            success: true,
+            data: updated,
         });
     }
     catch (error) {

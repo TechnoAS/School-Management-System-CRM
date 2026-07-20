@@ -1,6 +1,6 @@
 import { useState, ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Camera, Trash2, BadgeCheck } from "lucide-react";
+import { Camera, Trash2, BadgeCheck, Loader2 } from "lucide-react";
 import { Student, Course, Batch } from "@/types";
 import {
   Modal,
@@ -21,13 +21,15 @@ export function StudentFormModal({
   batches,
   onSave,
   onClose,
+  saving = false,
 }: {
   title: string;
   initial?: Student;
   courses: Course[];
   batches: Batch[];
-  onSave: (data: Omit<Student, "id">) => void;
+  onSave: (data: Omit<Student, "id">, photoFile?: File | null) => void | Promise<void>;
   onClose: () => void;
+  saving?: boolean;
 }) {
   const [f, setF] = useState({
     name: initial?.name ?? "",
@@ -46,10 +48,12 @@ export function StudentFormModal({
     feesPaid: initial?.feesPaid ?? 0,
     photo: initial?.photo ?? "",
   });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const up = (k: string) => (v: string) => setF(prev => ({ ...prev, [k]: v }));
 
   const handlePhoto = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Please choose an image file");
@@ -59,12 +63,13 @@ export function StudentFormModal({
       toast.error("Image must be smaller than 2 MB");
       return;
     }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = () => setF(prev => ({ ...prev, photo: String(reader.result) }));
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const payload = {
       ...f,
       feesTotal: initial ? f.feesTotal : (courses.find(c => c.name === f.course)?.fees ?? 0),
@@ -75,7 +80,7 @@ export function StudentFormModal({
       toast.error(checked.message);
       return;
     }
-    onSave(checked.data);
+    onSave(checked.data, photoFile);
   };
 
   return (
@@ -86,14 +91,18 @@ export function StudentFormModal({
           <p className="text-sm font-semibold text-foreground mb-0.5">Student Photo</p>
           <p className="text-xs text-muted-foreground mb-2">Upload a passport-style photo (JPG/PNG, max 2 MB).</p>
           <div className="flex gap-2">
-            <label className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-secondary text-secondary-foreground border border-border hover:bg-secondary/70 transition-all cursor-pointer">
+            <label className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-secondary text-secondary-foreground border border-border hover:bg-secondary/70 transition-all ${saving ? "opacity-60 pointer-events-none" : "cursor-pointer"}`}>
               <Camera size={12} /> {f.photo ? "Change Photo" : "Upload Photo"}
-              <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} disabled={saving} />
             </label>
             {f.photo && (
               <button
                 type="button"
-                onClick={() => up("photo")("")}
+                onClick={() => {
+                  up("photo")("");
+                  setPhotoFile(null);
+                }}
+                disabled={saving}
                 className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-all"
               >
                 <Trash2 size={12} /> Remove
@@ -156,8 +165,11 @@ export function StudentFormModal({
       <div className="flex items-center justify-between mt-5 pt-5 border-t border-border">
         <p className="text-xs text-muted-foreground">{initial ? "Changes will update the student record." : "Student ID will be auto-generated."}</p>
         <div className="flex gap-2">
-          <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
-          <Btn onClick={handleSave}><BadgeCheck size={14} /> {initial ? "Save Changes" : "Enroll Student"}</Btn>
+          <Btn variant="secondary" onClick={onClose} disabled={saving}>Cancel</Btn>
+          <Btn onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
+            {saving ? "Saving…" : initial ? "Save Changes" : "Enroll Student"}
+          </Btn>
         </div>
       </div>
     </Modal>

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Phone, Mail, Star, Award, Edit2, Camera } from "lucide-react";
+import { Phone, Mail, Star, Award, Edit2, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FacultyMember } from "@/types";
 import { Modal, Btn, AvatarChip as Avatar } from "@/components/shared";
 import { TODAY, FMT } from "@/lib/utils";
 import { API_ENABLED } from "@/api/config";
 import { facultyService } from "@/api/services/faculty.service";
-import { resolveUploadUrl } from "@/lib/uploads";
 
 export function FacultyTodayBadge({ member: f }: { member: FacultyMember }) {
   const marked = f.todayDate === TODAY && f.todayStatus;
@@ -45,6 +44,7 @@ export interface FacultyProfileModalProps {
 
 export function FacultyProfileModal({ member: f, onEdit, onClose, onUpdate }: FacultyProfileModalProps) {
   const [uploading, setUploading] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,6 +65,7 @@ export function FacultyProfileModal({ member: f, onEdit, onClose, onUpdate }: Fa
       setUploading(true);
       const updated = await facultyService.uploadPhoto(f.id, file);
       onUpdate?.({ ...updated, attendance: f.attendance, todayStatus: f.todayStatus, todayDate: f.todayDate });
+      setPhotoVersion(Date.now());
       toast.success("Photo updated successfully");
     } catch {
       toast.error("Failed to upload photo");
@@ -81,7 +82,8 @@ export function FacultyProfileModal({ member: f, onEdit, onClose, onUpdate }: Fa
           <Avatar
             name={f.name}
             size="lg"
-            src={f.photo ? resolveUploadUrl(f.photo) : undefined}
+            src={f.photo}
+            cacheBust={photoVersion || undefined}
           />
           <label
             className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 transition-opacity cursor-pointer ${
@@ -89,7 +91,11 @@ export function FacultyProfileModal({ member: f, onEdit, onClose, onUpdate }: Fa
             }`}
             title="Change photo"
           >
-            <Camera size={18} className="text-white" />
+            {uploading ? (
+              <Loader2 size={18} className="text-white animate-spin" />
+            ) : (
+              <Camera size={18} className="text-white" />
+            )}
             <input
               type="file"
               accept="image/*"

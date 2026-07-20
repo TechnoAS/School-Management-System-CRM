@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PageLayout, DashboardWidget } from "@/types/pageLayout";
+import { spanClass } from "@/lib/dashboardWidgetConfig";
 import { DashboardWidget as DashboardWidgetView } from "./DashboardWidget";
 import { WidgetEditChrome } from "./WidgetEditChrome";
 import { WidgetConfigPanel } from "./WidgetConfigPanel";
@@ -12,12 +13,6 @@ type Props = {
   editMode: boolean;
   onLayoutChange: (layout: PageLayout) => void;
 };
-
-function spanClass(span: number, isStat: boolean): string {
-  if (isStat) return "";
-  if (span >= 2) return "lg:col-span-2";
-  return "";
-}
 
 export function DynamicDashboard({ layout, data, editMode, onLayoutChange }: Props) {
   const [configuringId, setConfiguringId] = useState<string | null>(null);
@@ -53,7 +48,6 @@ export function DynamicDashboard({ layout, data, editMode, onLayoutChange }: Pro
 
     return (
       <WidgetEditChrome
-        key={widget.id}
         onConfigure={() => setConfiguringId(widget.id)}
         onRemove={() => removeWidget(widget.id)}
         onMoveUp={() => moveWidget(widget.id, -1)}
@@ -69,34 +63,39 @@ export function DynamicDashboard({ layout, data, editMode, onLayoutChange }: Pro
   const configuring = layout.widgets.find((w) => w.id === configuringId);
 
   return (
-    <>
+    <div className="space-y-5">
       {statWidgets.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-5">
-          {statWidgets.map((widget) => (
-            <div key={widget.id} className={widget.visible ? "" : "opacity-50"}>
-              {renderWidget(widget, layout.widgets.indexOf(widget), layout.widgets)}
-            </div>
-          ))}
-        </div>
+        <section>
+          <div className="dashboard-stat-grid">
+            {statWidgets.map((widget, index) => (
+              <div
+                key={widget.id}
+                className={`dashboard-widget-enter h-full ${widget.visible ? "" : "opacity-50"}`}
+                style={{ animationDelay: `${index * 45}ms` }}
+              >
+                {renderWidget(widget, layout.widgets.indexOf(widget), layout.widgets)}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {mainWidgets.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          {mainWidgets.map((widget) => (
+        <section className="dashboard-chart-grid">
+          {mainWidgets.map((widget, index) => (
             <div
               key={widget.id}
-              className={`${spanClass(widget.span, false)} ${widget.visible ? "" : "opacity-50"}`}
+              className={`dashboard-widget-enter h-full ${spanClass(widget.span)} ${widget.visible ? "" : "opacity-50"}`}
+              style={{ animationDelay: `${(statWidgets.length + index) * 55}ms` }}
             >
               {renderWidget(widget, layout.widgets.indexOf(widget), layout.widgets)}
             </div>
           ))}
-        </div>
+        </section>
       )}
 
       {editMode && (
-        <AddWidgetButton
-          onAdd={(widget) => onLayoutChange({ widgets: [...layout.widgets, widget] })}
-        />
+        <AddWidgetButton onAdd={(widget) => onLayoutChange({ widgets: [...layout.widgets, widget] })} />
       )}
 
       {configuring && (
@@ -106,6 +105,6 @@ export function DynamicDashboard({ layout, data, editMode, onLayoutChange }: Pro
           onClose={() => setConfiguringId(null)}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -113,29 +113,53 @@ cp .env.example .env
 
 > **Free Production Hosting Rule:** Configure these variables directly in your hosting dashboard (e.g., Render, Railway, Vercel, or Fly.io) instead of uploading a `.env` file.
 
+### Core App
+
 | Variable | Required | Description |
 |---|---|---|
 | `PORT` | ✅ | HTTP port (default `5000`) |
 | `NODE_ENV` | ✅ | `development` / `production` / `test` |
+| `LOG_LEVEL` | | `info` in production, `debug` while developing |
+
+### Database
+
+| Variable | Required | Description |
+|---|---|---|
 | `DATABASE_URL` | ✅ | MySQL connection string: `mysql://user:pass@host:3306/dbname` |
 | `DATABASE_POOL_MAX` | | Max DB pool connections (default `10`) |
+
+### Authentication
+
+| Variable | Required | Description |
+|---|---|---|
 | `JWT_ACCESS_SECRET` | ✅ | Access token secret (minimum 64 hex chars) |
 | `JWT_REFRESH_SECRET` | ✅ | Refresh token secret (minimum 64 hex chars) |
 | `JWT_ACCESS_EXPIRES_IN` | ✅ | `15m` (strict limit) |
 | `JWT_REFRESH_EXPIRES_IN` | ✅ | `7d` |
+
+### Security
+
+| Variable | Required | Description |
+|---|---|---|
 | `CORS_ORIGIN` | ✅ | React frontend URL (e.g., `http://localhost:3000`) |
 | `BCRYPT_ROUNDS` | | bcrypt work factor (default `12`) |
-| `UPLOAD_DIR` | | Absolute upload directory |
-| `MAX_UPLOAD_MB` | | Size limit (default `5`) |
-| `ALLOWED_MIME_TYPES` | | Allowed mime types (e.g., `image/jpeg,image/png,application/pdf`) |
-| `SMTP_HOST` | | Transactional SMTP Server (e.g. Brevo free SMTP / Gmail SMTP) |
-| `SMTP_PORT` | | SMTP Port (usually `587` or `465`) |
-| `SMTP_USER` | | SMTP Username |
-| `SMTP_PASS` | | SMTP Password |
-| `SMTP_FROM` | | `"School CRM" <no-reply@yourdomain.com>` |
 | `RATE_LIMIT_AUTH_MAX` | | Auth endpoints rate limit per 15 min window (default `5`) |
 | `RATE_LIMIT_API_MAX` | | API endpoints rate limit per 1 min window (default `120`) |
-| `LOG_LEVEL` | | Log level: `info` (production) / `debug` (development) |
+
+### Uploads
+
+| Variable | Required | Description |
+|---|---|---|
+| `STORAGE_PROVIDER` | | `local` (default) or `r2` |
+| `UPLOAD_DIR` | | Local upload directory used when `STORAGE_PROVIDER=local` |
+| `MAX_UPLOAD_MB` | | Size limit (default `5`) |
+| `ALLOWED_MIME_TYPES` | | Allowed mime types (e.g., `image/jpeg,image/png,application/pdf`) |
+| `R2_ACCOUNT_ID` | | Cloudflare account ID (optional if `R2_ENDPOINT` is set) |
+| `R2_ACCESS_KEY_ID` | | R2 API access key ID |
+| `R2_SECRET_ACCESS_KEY` | | R2 API secret access key |
+| `R2_BUCKET` | | R2 bucket name |
+| `R2_ENDPOINT` | | S3 endpoint (optional when account ID is provided) |
+| `R2_PUBLIC_BASE_URL` | | Public base URL used to build image URLs |
 
 ---
 
@@ -239,7 +263,7 @@ POST /api/auth/logout
 ### Password Reset *(planned — not yet implemented)*
 
 ```
-POST /api/auth/forgot-password   → Send reset link via SMTP (env vars reserved)
+POST /api/auth/forgot-password
 POST /api/auth/reset-password    → Verify token, hash new password, revoke refresh tokens
 ```
 
@@ -367,8 +391,6 @@ Once the Express API is ready, switch the frontend state client to fetch calls:
 
 ## Quick Start
 
-**MySQL Workbench users:** see [`MYSQL_WORKBENCH.md`](MYSQL_WORKBENCH.md) — run `npm run db:setup` once (creates database, schema, and admin account).
-
 ```bash
 cd backend
 cp .env.example .env
@@ -415,8 +437,6 @@ npm run db:setup
 ```
 
 This creates the database, runs `sql/001_init.sql`, and optionally `sql/seed_sample_data.sql`.
-
-See [`MYSQL_WORKBENCH.md`](MYSQL_WORKBENCH.md) for step-by-step instructions.
 
 ### Testing
 

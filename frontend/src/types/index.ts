@@ -1,4 +1,5 @@
 import type { PageLayouts } from "./pageLayout";
+import type { AdmissionFormConfig, StudentExtraData } from "./admissionForm";
 
 export type Student = {
   id: string;
@@ -19,6 +20,7 @@ export type Student = {
   dob: string;
   grade: string;
   photo?: string;
+  extraData?: StudentExtraData;
 };
 
 export type Role = "admin" | "staff" | "faculty" | "super_admin";
@@ -31,6 +33,18 @@ export type User = {
   photo?: string;
 };
 
+export type CourseMaterial = {
+  id: string;
+  title: string;
+  fileName: string;
+  url: string;
+  uploadedAt?: string;
+};
+
+export type CourseExtraData = {
+  materials?: CourseMaterial[];
+};
+
 export type Course = {
   id: string;
   name: string;
@@ -40,6 +54,11 @@ export type Course = {
   status: string;
   batches: number;
   enrolled: number;
+  startDate?: string;
+  endDate?: string;
+  logo?: string;
+  banner?: string;
+  extraData?: CourseExtraData;
 };
 
 export type Batch = {
@@ -167,4 +186,5 @@ export type InstituteSettings = {
   receipt: ReceiptSettings;
   certificate: CertificateSettings;
   pageLayouts?: PageLayouts;
+  admissionForm?: AdmissionFormConfig;
 };

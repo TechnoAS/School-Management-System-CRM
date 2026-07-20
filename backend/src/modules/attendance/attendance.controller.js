@@ -47,7 +47,9 @@ export async function upsert(req, res, next) {
 export async function listRecords(req, res, next) {
     try {
         const months = req.query.months ? Number(req.query.months) : 12;
-        const records = await listAttendanceRecords(months);
+        // Faculty members only see records from their own assigned batches
+        const facultyId = req.user?.role === 'faculty' ? req.user.id : null;
+        const records = await listAttendanceRecords(months, facultyId);
         res.status(200).json({
             success: true,
             data: records,

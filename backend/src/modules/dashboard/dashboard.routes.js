@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { stats, enrollmentTrend, feeTrend, todayClasses, courseEnrollment, reportStudents, reportAdmissions, reportFees, reportFeesDue, reportAttendance, reportFaculty, exportCSV, } from './dashboard.controller.js';
 import { requireAuth, requireRoles } from '../../middleware/auth.middleware.js';
 const router = Router();
-// Dashboard widgets (Available to all authorized roles)
+// Dashboard widgets — stats/enrollment/classes open to all roles; fee data restricted
 router.get('/dashboard/stats', requireAuth, stats);
 router.get('/dashboard/enrollment-trend', requireAuth, enrollmentTrend);
-router.get('/dashboard/fee-trend', requireAuth, feeTrend);
+router.get('/dashboard/fee-trend', requireAuth, requireRoles('admin', 'staff'), feeTrend);
 router.get('/dashboard/today-classes', requireAuth, todayClasses);
 router.get('/dashboard/course-enrollment', requireAuth, courseEnrollment);
 // Reporting routes (Restricted to Admin and Staff)

@@ -11,12 +11,14 @@
     "test:live": "cross-env RUN_LIVE_API_TESTS=1 vitest run --config vitest.live.config.js",
     "test:smoke": "node src/scripts/smoke-test-apis.js",
     "db:setup": "node src/scripts/setup-database.js",
+    "db:migrate": "node src/scripts/migrate-database.js",
     "db:reset": "cross-env DB_RESET=true node src/scripts/setup-database.js",
     "db:seed": "node src/scripts/seed-sample-data.js",
     "db:seed-passwords": "node src/scripts/seed-passwords.js",
     "db:reset-admin": "node src/scripts/seed-passwords.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1073.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

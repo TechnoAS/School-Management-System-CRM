@@ -14,293 +14,337 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Card, StatCard, StatusBadge as Badge } from "@/components/shared";
+import { Card, StatusBadge as Badge } from "@/components/shared";
 import { FMT } from "@/lib/utils";
+import { ensureWidgetColors } from "@/lib/dashboardWidgetConfig";
 import type { DashboardWidget as WidgetConfig } from "@/types/pageLayout";
 import { resolveDashboardIcon } from "./dashboardIcons";
 import { resolveKpiValue, type DashboardWidgetData } from "./dashboardWidgetData";
+import {
+  ChartLegendPills,
+  DashboardChartTooltip,
+  DashboardKpiCard,
+  DashboardWidgetShell,
+  DonutCenterLabel,
+  EmptyWidgetState,
+  ScheduleListItem,
+  SliceLegend,
+  chartGridStroke,
+} from "./dashboardVisuals";
 
 type Props = {
   widget: WidgetConfig;
   data: DashboardWidgetData;
 };
 
+const axisTick = { fontSize: 11, fill: "var(--muted-foreground)" };
+
 export function DashboardWidget({ widget, data }: Props) {
-  const colors = widget.colors ?? ["#1a3a5c", "#c0392b"];
+  const colors = ensureWidgetColors(widget);
+  const title = widget.title;
   const subtitle = widget.subtitle;
+  const primary = colors[0];
 
   if (widget.type === "stat") {
     const Icon = resolveDashboardIcon(widget.icon);
     const kpi = resolveKpiValue(widget.dataSource, data);
     return (
-      <StatCard
+      <DashboardKpiCard
         icon={Icon}
-        label={widget.title}
+        label={title}
         value={kpi.value}
-        sub={subtitle || kpi.sub}
-        accentHex={colors[0]}
+        sub={subtitle ?? kpi.sub}
+        accentHex={primary}
       />
     );
   }
 
-  // Enrollment Trend Line Chart
-  if (widget.type === "line" && widget.dataSource === "enrollment-trend") {
-    return (
-      <Card className="p-5 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">{widget.title}</h3>
-          {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={data.enrollmentData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid rgba(0,0,0,0.08)" }} />
-            <Line
-              isAnimationActive={false}
-              type="monotone"
-              dataKey="students"
-              stroke={colors[0]}
-              strokeWidth={3}
-              activeDot={{ r: 6 }}
-              name="Students"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </Card>
-    );
+  if (widget.dataSource === "enrollment-trend") {
+    if (widget.type === "line") {
+      return (
+        <DashboardWidgetShell title={title} subtitle={subtitle}>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={data.enrollmentData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke()} vertical={false} />
+              <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} dy={6} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={32} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Line
+                isAnimationActive={false}
+                type="monotone"
+                dataKey="students"
+                stroke={primary}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+                name="Students"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </DashboardWidgetShell>
+      );
+    }
+
+    if (widget.type === "area") {
+      return (
+        <DashboardWidgetShell title={title} subtitle={subtitle}>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={data.enrollmentData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke()} vertical={false} />
+              <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} dy={6} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={32} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Area
+                isAnimationActive={false}
+                type="monotone"
+                dataKey="students"
+                stroke={primary}
+                strokeWidth={2}
+                fill={primary}
+                fillOpacity={0.12}
+                name="Students"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </DashboardWidgetShell>
+      );
+    }
+
+    if (widget.type === "bar") {
+      return (
+        <DashboardWidgetShell title={title} subtitle={subtitle}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={data.enrollmentData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke()} vertical={false} />
+              <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} dy={6} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={32} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Bar
+                isAnimationActive={false}
+                dataKey="students"
+                fill={primary}
+                radius={[6, 6, 0, 0]}
+                maxBarSize={36}
+                name="Students"
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </DashboardWidgetShell>
+      );
+    }
   }
 
-  if (widget.type === "area" && widget.dataSource === "enrollment-trend") {
-    return (
-      <Card className="p-5 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">{widget.title}</h3>
-          {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={data.enrollmentData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid rgba(0,0,0,0.08)" }} />
-            <Area
-              isAnimationActive={false}
-              type="monotone"
-              dataKey="students"
-              stroke={colors[0]}
-              strokeWidth={2}
-              fill={colors[0]}
-              fillOpacity={0.1}
-              name="Students"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </Card>
-    );
-  }
-
-  if (widget.type === "bar" && widget.dataSource === "enrollment-trend") {
-    return (
-      <Card className="p-5 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">{widget.title}</h3>
-          {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={data.enrollmentData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-            <Bar isAnimationActive={false} dataKey="students" fill={colors[0]} radius={[4, 4, 0, 0]} name="Students" />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
-    );
-  }
-
-  if ((widget.type === "bar" || widget.type === "area" || widget.type === "line") && widget.dataSource === "fee-trend") {
+  if (widget.dataSource === "fee-trend" && (widget.type === "bar" || widget.type === "area" || widget.type === "line")) {
     const Chart = widget.type === "area" ? AreaChart : widget.type === "line" ? LineChart : BarChart;
+    const dueColor = colors[1] ?? "#c0392b";
+
     return (
-      <Card className="p-5 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">{widget.title}</h3>
-          {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-        </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <Chart data={data.feeData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+      <DashboardWidgetShell
+        title={title}
+        subtitle={subtitle}
+        headerExtra={
+          <ChartLegendPills
+            items={[
+              { label: "Collected", color: primary },
+              { label: "Due", color: dueColor },
+            ]}
+          />
+        }
+      >
+        <ResponsiveContainer width="100%" height={210}>
+          <Chart data={data.feeData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke()} vertical={false} />
+            <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} dy={6} />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={axisTick}
               axisLine={false}
               tickLine={false}
+              width={36}
               tickFormatter={(v) => `${v / 1000}k`}
             />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => FMT.format(v)} />
+            <Tooltip content={<DashboardChartTooltip valueFormatter={(v) => FMT.format(v)} />} />
             {widget.type === "area" ? (
               <>
-                <Area isAnimationActive={false} type="monotone" dataKey="collected" stroke={colors[0]} fill={colors[0]} fillOpacity={0.15} name="Collected" />
-                <Area isAnimationActive={false} type="monotone" dataKey="due" stroke={colors[1] ?? "#c0392b"} fill={colors[1] ?? "#c0392b"} fillOpacity={0.1} name="Due" />
+                <Area
+                  isAnimationActive={false}
+                  type="monotone"
+                  dataKey="collected"
+                  stroke={primary}
+                  strokeWidth={2}
+                  fill={primary}
+                  fillOpacity={0.15}
+                  name="Collected"
+                />
+                <Area
+                  isAnimationActive={false}
+                  type="monotone"
+                  dataKey="due"
+                  stroke={dueColor}
+                  strokeWidth={2}
+                  fill={dueColor}
+                  fillOpacity={0.1}
+                  name="Due"
+                />
               </>
             ) : widget.type === "line" ? (
               <>
-                <Line isAnimationActive={false} type="monotone" dataKey="collected" stroke={colors[0]} strokeWidth={3} activeDot={{ r: 6 }} name="Collected" />
-                <Line isAnimationActive={false} type="monotone" dataKey="due" stroke={colors[1] ?? "#c0392b"} strokeWidth={3} activeDot={{ r: 6 }} name="Due" />
+                <Line
+                  isAnimationActive={false}
+                  type="monotone"
+                  dataKey="collected"
+                  stroke={primary}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+                  name="Collected"
+                />
+                <Line
+                  isAnimationActive={false}
+                  type="monotone"
+                  dataKey="due"
+                  stroke={dueColor}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+                  name="Due"
+                />
               </>
             ) : (
               <>
-                <Bar isAnimationActive={false} dataKey="collected" fill={colors[0]} radius={[4, 4, 0, 0]} name="Collected" />
-                <Bar isAnimationActive={false} dataKey="due" fill={colors[1] ?? "#c0392b"} radius={[4, 4, 0, 0]} name="Due" />
+                <Bar isAnimationActive={false} dataKey="collected" fill={primary} radius={[6, 6, 0, 0]} maxBarSize={28} name="Collected" />
+                <Bar isAnimationActive={false} dataKey="due" fill={dueColor} radius={[6, 6, 0, 0]} maxBarSize={28} name="Due" />
               </>
             )}
           </Chart>
         </ResponsiveContainer>
-      </Card>
+      </DashboardWidgetShell>
     );
   }
 
-  // Course Enrollment Pie & Donut Charts
-  if ((widget.type === "pie" || widget.type === "donut") && widget.dataSource === "course-enrollment") {
-    const pieData = data.coursePie.map((slice, i) => ({
+  if (widget.dataSource === "course-enrollment") {
+    const coloredSlices = data.coursePie.map((slice, i) => ({
       ...slice,
       color: colors[i % colors.length] ?? slice.color,
     }));
-    return (
-      <Card className="p-5 h-full">
-        <h3 className="text-sm font-semibold text-foreground mb-3">{widget.title}</h3>
-        {pieData.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No enrollments yet</p>
-        ) : (
-          <>
-            <ResponsiveContainer width="100%" height={150}>
-              <PieChart>
-                <Pie
+    const total = coloredSlices.reduce((sum, slice) => sum + slice.value, 0);
+
+    if (widget.type === "pie" || widget.type === "donut") {
+      return (
+        <DashboardWidgetShell title={title} subtitle={subtitle}>
+          {coloredSlices.length === 0 ? (
+            <EmptyWidgetState message="No enrollments yet" />
+          ) : (
+            <>
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={168}>
+                  <PieChart>
+                    <Pie
+                      isAnimationActive={false}
+                      data={coloredSlices}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={widget.type === "donut" ? 52 : 0}
+                      outerRadius={widget.type === "donut" ? 72 : 74}
+                      paddingAngle={widget.type === "donut" ? 4 : 1}
+                      dataKey="value"
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                    >
+                      {coloredSlices.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<DashboardChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {widget.type === "donut" && <DonutCenterLabel total={total} label="Students" />}
+              </div>
+              <SliceLegend items={coloredSlices} />
+            </>
+          )}
+        </DashboardWidgetShell>
+      );
+    }
+
+    if (widget.type === "bar" || widget.type === "horizontal-bar") {
+      const barData = coloredSlices.map(({ name, value, color }) => ({ name, value, fill: color }));
+      const isHorizontal = widget.type === "horizontal-bar";
+
+      return (
+        <DashboardWidgetShell title={title} subtitle={subtitle}>
+          {barData.length === 0 ? (
+            <EmptyWidgetState message="No enrollments yet" />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={barData}
+                layout={isHorizontal ? "vertical" : "horizontal"}
+                margin={
+                  isHorizontal
+                    ? { top: 8, right: 16, left: 4, bottom: 8 }
+                    : { top: 8, right: 8, left: -8, bottom: 0 }
+                }
+              >
+                <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke()} horizontal={!isHorizontal} vertical={isHorizontal} />
+                {isHorizontal ? (
+                  <>
+                    <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={88}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} dy={6} />
+                    <YAxis tick={axisTick} axisLine={false} tickLine={false} width={32} />
+                  </>
+                )}
+                <Tooltip content={<DashboardChartTooltip />} />
+                <Bar
                   isAnimationActive={false}
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={widget.type === "donut" ? 44 : 0}
-                  outerRadius={65}
-                  paddingAngle={widget.type === "donut" ? 3 : 0}
                   dataKey="value"
+                  radius={isHorizontal ? [0, 6, 6, 0] : [6, 6, 0, 0]}
+                  maxBarSize={isHorizontal ? 22 : 36}
+                  name="Students"
                 >
-                  {pieData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
+                  {barData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
                   ))}
-                </Pie>
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
-            <div className="space-y-1.5 mt-1">
-              {pieData.map(({ name, value, color }) => (
-                <div key={name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-                    <span className="text-muted-foreground">{name}</span>
-                  </div>
-                  <span className="font-semibold text-foreground">{value}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </Card>
-    );
-  }
-
-  // Course Enrollment Vertical Bar Chart
-  if (widget.type === "bar" && widget.dataSource === "course-enrollment") {
-    const barData = data.coursePie.map((slice, i) => ({
-      name: slice.name,
-      value: slice.value,
-      fill: colors[i % colors.length] ?? slice.color,
-    }));
-    return (
-      <Card className="p-5 h-full">
-        <h3 className="text-sm font-semibold text-foreground mb-3">{widget.title}</h3>
-        {barData.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No enrollments yet</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar isAnimationActive={false} dataKey="value" radius={[4, 4, 0, 0]} name="Students">
-                {barData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Card>
-    );
-  }
-
-  // Course Enrollment Horizontal Bar Chart
-  if (widget.type === "horizontal-bar" && widget.dataSource === "course-enrollment") {
-    const barData = data.coursePie.map((slice, i) => ({
-      name: slice.name,
-      value: slice.value,
-      fill: colors[i % colors.length] ?? slice.color,
-    }));
-    return (
-      <Card className="p-5 h-full">
-        <h3 className="text-sm font-semibold text-foreground mb-3">{widget.title}</h3>
-        {barData.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No enrollments yet</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar isAnimationActive={false} dataKey="value" radius={[0, 4, 4, 0]} name="Students">
-                {barData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Card>
-    );
+          )}
+        </DashboardWidgetShell>
+      );
+    }
   }
 
   if (widget.type === "list" && widget.dataSource === "today-classes") {
     return (
-      <Card className="p-5 h-full">
-        <h3 className="text-sm font-semibold text-foreground mb-3">{widget.title}</h3>
+      <DashboardWidgetShell title={title} subtitle={subtitle}>
         {data.todayClasses.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No ongoing batches scheduled</p>
+          <EmptyWidgetState message="No ongoing batches scheduled" />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {data.todayClasses.map((cls) => (
-              <div key={`${cls.batch}-${cls.time}`} className="flex items-start gap-2.5">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                    cls.status === "Ongoing" ? "bg-emerald-500" : cls.status === "Completed" ? "bg-blue-400" : "bg-amber-400"
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-foreground truncate">{cls.course}</div>
-                  <div className="text-xs text-muted-foreground">{cls.time}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {cls.faculty} · {cls.batch}
-                  </div>
-                </div>
-                <Badge status={cls.status} />
-              </div>
+              <ScheduleListItem
+                key={`${cls.batch}-${cls.time}`}
+                course={cls.course}
+                time={cls.time}
+                faculty={cls.faculty}
+                batch={cls.batch}
+                status={cls.status}
+                badge={<Badge status={cls.status} />}
+              />
             ))}
           </div>
         )}
-      </Card>
+      </DashboardWidgetShell>
     );
   }
 
@@ -310,4 +354,3 @@ export function DashboardWidget({ widget, data }: Props) {
     </Card>
   );
 }
-

@@ -50,4 +50,21 @@ export const studentsService = {
     });
     return mapStudent(row);
   },
+
+  async uploadDocument(
+    id: string,
+    slotId: string,
+    label: string,
+    file: File
+  ): Promise<Student> {
+    const form = new FormData();
+    form.append("document", file);
+    form.append("slotId", slotId);
+    form.append("label", label);
+    const row = await apiRequest<Record<string, unknown>>(`/students/${id}/documents`, {
+      method: "POST",
+      body: form,
+    });
+    return mapStudent(row);
+  },
 };

@@ -13,6 +13,9 @@ import {
   certificateSettingsSchema,
 } from "@/lib/validation/settings";
 import { validateForm } from "@/lib/validation/formErrors";
+import { useAppStore } from "@/store/useAppStore";
+import { DEFAULT_ADMISSION_FORM } from "@/lib/defaultAdmissionForm";
+import { AdmissionFormCustomizer } from "@/features/students/AdmissionFormCustomizer";
 
 const ALLOWED_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -56,8 +59,12 @@ function buildInstitutePayload(
 export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) {
   const [tab, setTab] = useState("institute");
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoVersion, setLogoVersion] = useState(0);
+  const user = useAppStore(s => s.user);
+  const isSuperAdmin = user?.role === "super_admin";
+  const admissionForm = settings.admissionForm ?? DEFAULT_ADMISSION_FORM;
 
-  const displayLogo = resolveUploadUrl(settings.logoUrl);
+  const displayLogo = resolveUploadUrl(settings.logoUrl, logoVersion || undefined);
 
   const handleSave = async (section: string) => {
     try {
@@ -128,19 +135,17 @@ export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) 
       return;
     }
 
+    if (!settings.name?.trim()) {
+      toast.error("Enter an institute name before uploading a logo");
+      return;
+    }
+
     if (API_ENABLED) {
-      const built = buildInstitutePayload(settings);
-      if (!built.ok) {
-        toast.error(built.message);
-        return;
-      }
       setLogoUploading(true);
       try {
-        const saved = await settingsService.updateInstitute(
-          { ...built.payload, logoUrl: undefined },
-          file
-        );
+        const saved = await settingsService.uploadLogo(settings.name.trim(), file);
         updateSettings(saved);
+        setLogoVersion(Date.now());
         toast.success("Logo updated");
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Failed to upload logo");
@@ -169,6 +174,7 @@ export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) 
       try {
         const saved = await settingsService.updateInstitute(built.payload);
         updateSettings(saved);
+        setLogoVersion(Date.now());
         toast.success("Logo removed");
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Failed to remove logo");
@@ -191,6 +197,7 @@ export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) 
           { id: "institute", label: "Institute" },
           { id: "receipt", label: "Receipt Format" },
           { id: "certificate", label: "Certificate" },
+          ...(isSuperAdmin ? [{ id: "admission", label: "Admission Form" }] : []),
           { id: "roles", label: "User Roles" },
         ]}
         active={tab}
@@ -201,8 +208,10 @@ export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="p-5 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center mb-3 overflow-hidden">
-              {displayLogo ? (
+              {displayLogo && !logoUploading ? (
                 <img src={displayLogo} alt="Institute logo" className="w-full h-full object-cover" />
+              ) : logoUploading ? (
+                <Loader2 size={28} className="text-white animate-spin" />
               ) : (
                 <GraduationCap size={32} className="text-white" />
               )}
@@ -401,6 +410,14 @@ export function SettingsPanel({ settings, updateSettings }: SettingsPanelProps) 
             </Btn>
           </div>
         </Card>
+      )}
+
+      {tab === "admission" && isSuperAdmin && (
+        <AdmissionFormCustomizer
+          config={admissionForm}
+          onSave={saved => updateSettings({ admissionForm: saved })}
+          onCancel={() => setTab("institute")}
+        />
       )}
 
       {tab === "roles" && (

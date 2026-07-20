@@ -86,3 +86,22 @@ export async function updatePageLayout(pageId, layout) {
     await pool.query('UPDATE institute_settings SET page_layouts = ? WHERE id = 1', [JSON.stringify(merged)]);
     return layout;
 }
+const ADMISSION_FORM_KEY = '__admissionForm';
+export const DEFAULT_ADMISSION_FORM_CONFIG = {
+    customFields: [],
+    documentSlots: [
+        { id: 'aadhaar', label: 'Aadhaar Card', description: 'Government ID proof (PDF or image)', required: true, accept: 'image/*,application/pdf' },
+        { id: 'marksheet', label: 'Previous Marksheet', description: 'Latest academic record', required: false, accept: 'image/*,application/pdf' },
+        { id: 'transfer-cert', label: 'Transfer Certificate', description: 'If applicable', required: false, accept: 'image/*,application/pdf' },
+    ],
+};
+export async function getAdmissionFormConfig() {
+    const layouts = await getPageLayouts();
+    return layouts[ADMISSION_FORM_KEY] ?? DEFAULT_ADMISSION_FORM_CONFIG;
+}
+export async function updateAdmissionFormConfig(config) {
+    const layouts = await getPageLayouts();
+    const merged = { ...layouts, [ADMISSION_FORM_KEY]: config };
+    await pool.query('UPDATE institute_settings SET page_layouts = ? WHERE id = 1', [JSON.stringify(merged)]);
+    return config;
+}

@@ -393,6 +393,7 @@ export const useAppStore = create<AppState>()(
             pageLayouts: patch.pageLayouts
               ? { ...state.settings.pageLayouts, ...patch.pageLayouts }
               : state.settings.pageLayouts,
+            admissionForm: patch.admissionForm ?? state.settings.admissionForm,
           },
         })),
 

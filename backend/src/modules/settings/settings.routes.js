@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getBranding, getInstitute, updateInstitute, getReceipt, updateReceipt, getCertificate, updateCertificate, getPageLayoutHandler, updatePageLayoutHandler, } from './settings.controller.js';
+import { getBranding, getInstitute, updateInstitute, getReceipt, updateReceipt, getCertificate, updateCertificate, getPageLayoutHandler, updatePageLayoutHandler, getAdmissionFormHandler, updateAdmissionFormHandler, } from './settings.controller.js';
 import { requireAuth, requireRoles } from '../../middleware/auth.middleware.js';
 import { upload } from '../students/students.controller.js';
 const router = Router();
@@ -13,4 +13,6 @@ router.get('/certificate', requireAuth, requireRoles('admin', 'staff', 'faculty'
 router.patch('/certificate', requireAuth, requireRoles('admin'), updateCertificate);
 router.get('/page-layout/:pageId', requireAuth, requireRoles('admin', 'staff', 'faculty'), getPageLayoutHandler);
 router.patch('/page-layout/:pageId', requireAuth, requireRoles('super_admin'), updatePageLayoutHandler);
+router.get('/admission-form', requireAuth, requireRoles('admin', 'staff'), getAdmissionFormHandler);
+router.patch('/admission-form', requireAuth, requireRoles('super_admin'), updateAdmissionFormHandler);
 export { router as settingsRouter };

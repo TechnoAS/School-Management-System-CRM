@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { list, getStudent, create, update, remove, uploadPhoto, upload } from './students.controller.js';
+import { list, getStudent, create, update, remove, uploadPhoto, uploadDocument, upload } from './students.controller.js';
 import { requireAuth, requireRoles } from '../../middleware/auth.middleware.js';
 const router = Router();
 // Student endpoints - Admin and staff access
@@ -10,4 +10,5 @@ router.patch('/:id', requireAuth, requireRoles('admin', 'staff'), update);
 router.delete('/:id', requireAuth, requireRoles('admin'), remove);
 // Photo upload (using multer middleware)
 router.post('/:id/photo', requireAuth, requireRoles('admin', 'staff'), upload.single('photo'), uploadPhoto);
+router.post('/:id/documents', requireAuth, requireRoles('admin', 'staff'), upload.single('document'), uploadDocument);
 export { router as studentsRouter };

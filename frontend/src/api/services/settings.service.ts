@@ -1,5 +1,5 @@
 import { apiRequest } from "../client";
-import { mapInstituteSettings } from "../mappers";
+import { mapInstituteSettings, mapAdmissionFormConfig } from "../mappers";
 import type { InstituteSettings } from "@/types";
 
 function institutePayload(patch: Partial<InstituteSettings>) {
@@ -35,24 +35,34 @@ export const settingsService = {
     logoFile?: File | null
   ) {
     if (logoFile) {
-      const form = new FormData();
-      form.append("logo", logoFile);
-      const fields = institutePayload(patch);
-      for (const [key, value] of Object.entries(fields)) {
-        if (value !== undefined && value !== null) {
-          form.append(key, String(value));
-        }
-      }
-      const row = await apiRequest<Record<string, unknown>>("/settings/institute", {
-        method: "PATCH",
-        body: form,
-      });
-      return mapInstituteSettings(row);
+      return this.uploadLogo(patch.name ?? "Institute", logoFile, patch);
     }
 
     const row = await apiRequest<Record<string, unknown>>("/settings/institute", {
       method: "PATCH",
       body: JSON.stringify(institutePayload(patch)),
+    });
+    return mapInstituteSettings(row);
+  },
+
+  async uploadLogo(
+    name: string,
+    file: File,
+    patch: Partial<InstituteSettings> = {}
+  ) {
+    const form = new FormData();
+    form.append("logo", file);
+    form.append("name", name);
+    const fields = institutePayload(patch);
+    for (const [key, value] of Object.entries(fields)) {
+      if (key === "logoUrl") continue;
+      if (value !== undefined && value !== null && value !== "") {
+        form.append(key, String(value));
+      }
+    }
+    const row = await apiRequest<Record<string, unknown>>("/settings/institute", {
+      method: "PATCH",
+      body: form,
     });
     return mapInstituteSettings(row);
   },
@@ -69,5 +79,18 @@ export const settingsService = {
       method: "PATCH",
       body: JSON.stringify(certificate),
     });
+  },
+
+  async getAdmissionForm() {
+    const row = await apiRequest<Record<string, unknown>>("/settings/admission-form");
+    return mapAdmissionFormConfig(row);
+  },
+
+  async updateAdmissionForm(config: InstituteSettings["admissionForm"]) {
+    const row = await apiRequest<Record<string, unknown>>("/settings/admission-form", {
+      method: "PATCH",
+      body: JSON.stringify(config),
+    });
+    return mapAdmissionFormConfig(row);
   },
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, Dispatch, SetStateAction } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Plus, Search, X, Download, Eye, Edit2, Trash2 } from "lucide-react";
 import { Student, Course, Batch } from "@/types";
@@ -11,7 +11,7 @@ import {
   AvatarChip as Avatar,
   StatusBadge as Badge,
 } from "@/components/shared";
-import { genId, handleExport, FMT } from "@/lib/utils";
+import { handleExport, FMT } from "@/lib/utils";
 import { StudentProfile } from "./StudentProfile";
 import { StudentFormModal } from "./StudentFormModal";
 import { API_ENABLED } from "@/api/config";
@@ -32,16 +32,17 @@ export function StudentsPage({
   batches: Batch[];
 }) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("All Courses");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [page, setPage] = useState(1);
-  const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Student | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
   const [selected, setSelected] = useState<Student | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [savingStudent, setSavingStudent] = useState(false);
 
   useEffect(() => {
     const q = searchParams.get("search");
@@ -116,27 +117,15 @@ export function StudentsPage({
     }
   };
 
-  const handleAdd = async (data: Omit<Student, "id">) => {
-    const id = genId("STU", students);
-    try {
-      if (API_ENABLED) {
-        const student = await studentsService.create(data, courses, batches, id);
-        setStudents(prev => [student, ...prev]);
-      } else {
-        setStudents(prev => [{ id, ...data }, ...prev]);
-      }
-      toast.success(`${data.name} enrolled successfully!`, { description: `Student ID: ${id}` });
-      setShowAdd(false);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to create student");
-    }
-  };
-
-  const handleEdit = async (data: Omit<Student, "id">) => {
+  const handleEdit = async (data: Omit<Student, "id">, photoFile?: File | null) => {
     if (!editTarget) return;
+    setSavingStudent(true);
     try {
       if (API_ENABLED) {
-        const student = await studentsService.update(editTarget.id, data, courses, batches);
+        let student = await studentsService.update(editTarget.id, data, courses, batches);
+        if (photoFile) {
+          student = await studentsService.uploadPhoto(student.id, photoFile);
+        }
         setStudents(prev => prev.map(s => (s.id === editTarget.id ? student : s)));
       } else {
         setStudents(prev => prev.map(s => (s.id === editTarget.id ? { ...s, ...data } : s)));
@@ -145,6 +134,8 @@ export function StudentsPage({
       setEditTarget(null);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to update student");
+    } finally {
+      setSavingStudent(false);
     }
   };
 
@@ -168,7 +159,7 @@ export function StudentsPage({
         title="Student Management"
         subtitle={`${students.length} students enrolled across all courses`}
         action={
-          <Btn onClick={() => setShowAdd(true)}>
+          <Btn onClick={() => navigate("/students/new")}>
             <Plus size={14} /> New Admission
           </Btn>
         }
@@ -387,15 +378,6 @@ export function StudentsPage({
         </div>
       </Card>
 
-      {showAdd && (
-        <StudentFormModal
-          title="New Student Admission"
-          courses={courses}
-          batches={batches}
-          onSave={handleAdd}
-          onClose={() => setShowAdd(false)}
-        />
-      )}
       {editTarget && (
         <StudentFormModal
           title="Edit Student"
@@ -404,6 +386,7 @@ export function StudentsPage({
           batches={batches}
           onSave={handleEdit}
           onClose={() => setEditTarget(null)}
+          saving={savingStudent}
         />
       )}
       {deleteTarget && (

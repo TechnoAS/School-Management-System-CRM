@@ -52,7 +52,7 @@ export async function remove(req, res, next) {
             throw new UnauthorizedError();
         }
         const id = parseInt(req.params.id, 10);
-        await deleteNotification(id, req.user.id);
+        await deleteNotification(id, req.user.id, req.user.role);
         res.status(200).json({
             success: true,
             message: 'Notification deleted successfully',

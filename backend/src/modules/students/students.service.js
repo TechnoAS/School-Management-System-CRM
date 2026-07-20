@@ -77,8 +77,8 @@ export async function createStudent(data) {
             throw new NotFoundError(`Batch with ID "${data.batchId}" not found`);
         }
     }
-    await pool.query(`INSERT INTO students (id, name, phone, email, course_id, batch_id, guardian, guardian_phone, address, admission_date, fees_total, fees_paid, status, dob, grade, photo_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    await pool.query(`INSERT INTO students (id, name, phone, email, course_id, batch_id, guardian, guardian_phone, address, admission_date, fees_total, fees_paid, status, dob, grade, photo_url, extra_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         data.id,
         data.name,
         data.phone || null,
@@ -95,6 +95,7 @@ export async function createStudent(data) {
         data.dob || null,
         data.grade || null,
         data.photoUrl || null,
+        data.extraData ? JSON.stringify(data.extraData) : null,
     ]);
     return getStudentById(data.id);
 }
@@ -135,13 +136,14 @@ export async function updateStudent(id, data) {
         dob: 'dob',
         grade: 'grade',
         photoUrl: 'photo_url',
+        extraData: 'extra_data',
     };
     for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
             const dbCol = mapping[key];
             if (dbCol) {
                 fields.push(`${dbCol} = ?`);
-                values.push(value);
+                values.push(dbCol === 'extra_data' && value != null ? JSON.stringify(value) : value);
             }
         }
     }

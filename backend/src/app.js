@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { apiRateLimiter } from './middleware/rate-limit.js';
+import { requireAuth } from './middleware/auth.middleware.js';
 import { pool } from './config/database.js';
 import { logger } from './config/logger.js';
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -53,8 +55,21 @@ app.use((req, res, next) => {
 });
 // 5. Rate Limiting (Global for all /api endpoints)
 app.use('/api', apiRateLimiter);
-// Uploaded files (logos, student photos)
-app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
+// Uploaded files (logos, student photos) — authentication required
+// This prevents unauthenticated enumeration/download of uploaded assets.
+app.get('/uploads/:filename', requireAuth, (req, res, next) => {
+    // Reject any path-traversal attempts
+    const filename = path.basename(req.params.filename);
+    const filePath = path.resolve(env.UPLOAD_DIR, filename);
+    // Ensure resolved path stays inside the upload directory
+    if (!filePath.startsWith(path.resolve(env.UPLOAD_DIR))) {
+        return res.status(403).json({ success: false, error: { message: 'Forbidden' } });
+    }
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: { message: 'File not found' } });
+    }
+    res.sendFile(filePath);
+});
 // 5. Health Check Route (Database connectivity check included)
 app.get('/api/health', async (_req, res, next) => {
     try {

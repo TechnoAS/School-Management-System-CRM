@@ -22,7 +22,22 @@ export async function createCourse(data) {
     if (existing) {
         throw new ConflictError(`Course with ID "${data.id}" already exists`);
     }
-    await pool.query('INSERT INTO courses (id, name, duration, fees, description, status) VALUES (?, ?, ?, ?, ?, ?)', [data.id, data.name, data.duration, data.fees, data.description || null, data.status]);
+    await pool.query(
+        'INSERT INTO courses (id, name, duration, fees, description, status, start_date, end_date, logo_url, banner_url, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            data.id,
+            data.name,
+            data.duration,
+            data.fees,
+            data.description || null,
+            data.status,
+            data.startDate || null,
+            data.endDate || null,
+            data.logoUrl || null,
+            data.bannerUrl || null,
+            data.extraData ? JSON.stringify(data.extraData) : null,
+        ]
+    );
     return data;
 }
 export async function updateCourse(id, data) {
@@ -32,10 +47,25 @@ export async function updateCourse(id, data) {
     }
     const fields = [];
     const values = [];
+    const mapping = {
+        name: 'name',
+        duration: 'duration',
+        fees: 'fees',
+        description: 'description',
+        status: 'status',
+        startDate: 'start_date',
+        endDate: 'end_date',
+        logoUrl: 'logo_url',
+        bannerUrl: 'banner_url',
+        extraData: 'extra_data',
+    };
     for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
-            fields.push(`${key} = ?`);
-            values.push(value);
+            const dbCol = mapping[key];
+            if (dbCol) {
+                fields.push(`${dbCol} = ?`);
+                values.push(dbCol === 'extra_data' && value != null ? JSON.stringify(value) : value);
+            }
         }
     }
     if (fields.length === 0) {
@@ -44,7 +74,7 @@ export async function updateCourse(id, data) {
     values.push(id);
     const query = `UPDATE courses SET ${fields.join(', ')} WHERE id = ?`;
     await pool.query(query, values);
-    return { ...existing, ...data };
+    return getCourseById(id);
 }
 export async function deleteCourse(id) {
     const existing = await getCourseById(id);

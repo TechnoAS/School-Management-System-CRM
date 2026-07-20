@@ -75,6 +75,14 @@ function isAuthPath(path: string): boolean {
   return path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
 }
 
+function cloneFormData(form: FormData): FormData {
+  const copy = new FormData();
+  for (const [key, value] of form.entries()) {
+    copy.append(key, value);
+  }
+  return copy;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -100,7 +108,11 @@ export async function apiRequest<T>(
   if (res.status === 401 && !retried && !isAuthPath(path)) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      return apiRequest<T>(path, options, true);
+      const retryOptions =
+        options.body instanceof FormData
+          ? { ...options, body: cloneFormData(options.body) }
+          : options;
+      return apiRequest<T>(path, retryOptions, true);
     }
     emitAuthExpired();
   }

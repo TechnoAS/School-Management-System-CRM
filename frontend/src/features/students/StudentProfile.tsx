@@ -8,6 +8,7 @@ import {
   Download,
   Edit2,
   Camera,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Student } from "@/types";
@@ -20,7 +21,6 @@ import {
 import { FMT, handlePrint, handleExport } from "@/lib/utils";
 import { API_ENABLED } from "@/api/config";
 import { studentsService } from "@/api/services/students.service";
-import { resolveUploadUrl } from "@/lib/uploads";
 
 export function StudentProfile({
   student: s,
@@ -34,6 +34,7 @@ export function StudentProfile({
   onUpdate?: (s: Student) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
   const due = s.feesTotal - s.feesPaid;
   const pct = s.feesTotal > 0 ? Math.round((s.feesPaid / s.feesTotal) * 100) : 0;
 
@@ -56,6 +57,7 @@ export function StudentProfile({
       setUploading(true);
       const updated = await studentsService.uploadPhoto(s.id, file);
       onUpdate?.(updated);
+      setPhotoVersion(Date.now());
       toast.success("Photo updated successfully");
     } catch {
       toast.error("Failed to upload photo");
@@ -81,7 +83,8 @@ export function StudentProfile({
             <Avatar
               name={s.name}
               size="lg"
-              src={s.photo ? resolveUploadUrl(s.photo) : undefined}
+              src={s.photo}
+              cacheBust={photoVersion || undefined}
             />
             <label
               className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 transition-opacity cursor-pointer ${
@@ -89,7 +92,11 @@ export function StudentProfile({
               }`}
               title="Change photo"
             >
-              <Camera size={18} className="text-white" />
+              {uploading ? (
+                <Loader2 size={18} className="text-white animate-spin" />
+              ) : (
+                <Camera size={18} className="text-white" />
+              )}
               <input
                 type="file"
                 accept="image/*"
