@@ -1,20 +1,22 @@
-import { pool } from '../../config/database.js';
+import { InstituteSettings } from '../../models/InstituteSettings.js';
+
 export async function getSettings() {
-    const [rows] = await pool.query('SELECT * FROM institute_settings WHERE id = 1');
-    let settings = rows[0];
+    let settings = await InstituteSettings.findOne({ id: 1 }).lean();
     if (!settings) {
-        // If not seeded, insert a basic placeholder
-        await pool.query(`INSERT INTO institute_settings (id, name, email, phone) 
-       VALUES (1, 'TechAcademy CRM', 'admin@techacademy.com', '+91 98450 10001')`);
-        const [freshRows] = await pool.query('SELECT * FROM institute_settings WHERE id = 1');
-        settings = freshRows[0];
+        await InstituteSettings.create({
+            id: 1,
+            name: 'TechAcademy CRM',
+            email: 'admin@techacademy.com',
+            phone: '+91 98450 10001'
+        });
+        settings = await InstituteSettings.findOne({ id: 1 }).lean();
     }
     return settings;
 }
+
 export async function updateInstituteSettings(data) {
-    await getSettings(); // Ensure settings row exists
-    const fields = [];
-    const values = [];
+    await getSettings(); 
+    
     const mapping = {
         name: 'name',
         phone: 'phone',
@@ -24,84 +26,85 @@ export async function updateInstituteSettings(data) {
         academicYear: 'academic_year',
         logoUrl: 'logo_url',
     };
+    
+    const updateData = {};
     for (const [key, value] of Object.entries(data)) {
-        if (value !== undefined) {
-            const dbCol = mapping[key];
-            if (dbCol) {
-                fields.push(`${dbCol} = ?`);
-                values.push(value);
-            }
+        if (value !== undefined && mapping[key]) {
+            updateData[mapping[key]] = value;
         }
     }
-    if (fields.length > 0) {
-        const query = `UPDATE institute_settings SET ${fields.join(', ')} WHERE id = 1`;
-        await pool.query(query, values);
+    
+    if (Object.keys(updateData).length > 0) {
+        await InstituteSettings.updateOne({ id: 1 }, { $set: updateData });
     }
+    
     return getSettings();
 }
+
 export async function updateReceiptSettings(data) {
     const current = await getSettings();
     const currentConfig = typeof current.receipt_config === 'string'
         ? JSON.parse(current.receipt_config)
         : current.receipt_config || {};
     const mergedConfig = { ...currentConfig, ...data };
-    await pool.query('UPDATE institute_settings SET receipt_config = ? WHERE id = 1', [JSON.stringify(mergedConfig)]);
+    await InstituteSettings.updateOne({ id: 1 }, { $set: { receipt_config: mergedConfig } });
     return mergedConfig;
 }
+
 export async function updateCertificateSettings(data) {
     const current = await getSettings();
     const currentConfig = typeof current.certificate_config === 'string'
         ? JSON.parse(current.certificate_config)
         : current.certificate_config || {};
     const mergedConfig = { ...currentConfig, ...data };
-    await pool.query('UPDATE institute_settings SET certificate_config = ? WHERE id = 1', [JSON.stringify(mergedConfig)]);
+    await InstituteSettings.updateOne({ id: 1 }, { $set: { certificate_config: mergedConfig } });
     return mergedConfig;
 }
+
 function parseJsonColumn(value, fallback) {
-    if (value == null)
-        return fallback;
+    if (value == null) return fallback;
     if (typeof value === 'string') {
-        try {
-            return JSON.parse(value);
-        }
-        catch {
-            return fallback;
-        }
+        try { return JSON.parse(value); } catch { return fallback; }
     }
     return value;
 }
+
 export async function getPageLayouts() {
     const current = await getSettings();
-    if (!current)
-        return {};
+    if (!current) return {};
     return parseJsonColumn(current.page_layouts, {});
 }
+
 export async function getPageLayout(pageId) {
     const layouts = await getPageLayouts();
     return layouts[pageId] ?? null;
 }
+
 export async function updatePageLayout(pageId, layout) {
     const layouts = await getPageLayouts();
     const merged = { ...layouts, [pageId]: layout };
-    await pool.query('UPDATE institute_settings SET page_layouts = ? WHERE id = 1', [JSON.stringify(merged)]);
+    await InstituteSettings.updateOne({ id: 1 }, { $set: { page_layouts: merged } });
     return layout;
 }
+
 const ADMISSION_FORM_KEY = '__admissionForm';
 export const DEFAULT_ADMISSION_FORM_CONFIG = {
     customFields: [],
     documentSlots: [
-        { id: 'aadhaar', label: 'Aadhaar Card', description: 'Government ID proof (PDF or image)', required: true, accept: 'image/*,application/pdf' },
+        { id: 'aadhaar', label: 'Aadhaar Card', description: 'Government ID proof', required: true, accept: 'image/*,application/pdf' },
         { id: 'marksheet', label: 'Previous Marksheet', description: 'Latest academic record', required: false, accept: 'image/*,application/pdf' },
         { id: 'transfer-cert', label: 'Transfer Certificate', description: 'If applicable', required: false, accept: 'image/*,application/pdf' },
     ],
 };
+
 export async function getAdmissionFormConfig() {
     const layouts = await getPageLayouts();
     return layouts[ADMISSION_FORM_KEY] ?? DEFAULT_ADMISSION_FORM_CONFIG;
 }
+
 export async function updateAdmissionFormConfig(config) {
     const layouts = await getPageLayouts();
     const merged = { ...layouts, [ADMISSION_FORM_KEY]: config };
-    await pool.query('UPDATE institute_settings SET page_layouts = ? WHERE id = 1', [JSON.stringify(merged)]);
+    await InstituteSettings.updateOne({ id: 1 }, { $set: { page_layouts: merged } });
     return config;
 }

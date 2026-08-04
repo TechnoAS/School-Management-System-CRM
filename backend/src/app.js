@@ -8,7 +8,7 @@ import { env } from './config/env.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { apiRateLimiter } from './middleware/rate-limit.js';
 import { requireAuth } from './middleware/auth.middleware.js';
-import { pool } from './config/database.js';
+import mongoose from 'mongoose';
 import { logger } from './config/logger.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { coursesRouter } from './modules/courses/courses.routes.js';
@@ -73,9 +73,10 @@ app.get('/uploads/:filename', requireAuth, (req, res, next) => {
 // 5. Health Check Route (Database connectivity check included)
 app.get('/api/health', async (_req, res, next) => {
     try {
-        // Check database connection pool
-        const connection = await pool.getConnection();
-        connection.release();
+        const state = mongoose.connection.readyState;
+        const isConnected = state === 1;
+        if (!isConnected) throw new Error('Database not connected');
+        
         res.status(200).json({
             success: true,
             message: 'TechAcademy CRM Backend is running',

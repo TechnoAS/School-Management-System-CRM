@@ -1,25 +1,19 @@
-import { pool } from '../../config/database.js';
 import { logger } from '../../config/logger.js';
+import { AuditLog } from '../../models/AuditLog.js';
+
 export async function createAuditLog(params) {
-    const { userId, action, entity, entityId, beforeData, afterData, ipAddress, userAgent, } = params;
+    const { userId, action, entity, entityId, beforeData, afterData, ipAddress, userAgent } = params;
     try {
-        const query = `
-      INSERT INTO audit_log (
-        user_id, action, entity, entity_id, before_data, after_data, ip_address, user_agent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-        const beforeJson = beforeData ? JSON.stringify(beforeData) : null;
-        const afterJson = afterData ? JSON.stringify(afterData) : null;
-        await pool.query(query, [
-            userId || null,
+        await AuditLog.create({
+            user_id: userId || null,
             action,
-            entity || null,
-            entityId || null,
-            beforeJson,
-            afterJson,
-            ipAddress || null,
-            userAgent || null,
-        ]);
+            entity: entity || null,
+            entity_id: entityId || null,
+            before_data: beforeData || null,
+            after_data: afterData || null,
+            ip_address: ipAddress || null,
+            user_agent: userAgent || null,
+        });
     }
     catch (error) {
         logger.warn('Failed to write audit log', { action, entity, entityId, error });

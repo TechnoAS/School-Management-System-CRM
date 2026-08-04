@@ -1,96 +1,121 @@
-import { pool } from '../../config/database.js';
+import { Student } from '../../models/Student.js';
+import { Course } from '../../models/Course.js';
+import { Batch } from '../../models/Batch.js';
+import { Faculty } from '../../models/Faculty.js';
+import { Payment } from '../../models/Payment.js';
+import { AttendanceRecord } from '../../models/AttendanceRecord.js';
+
 function inferClassStatus(timing) {
     const match = timing.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-    if (!match)
-        return 'Upcoming';
+    if (!match) return 'Upcoming';
     let hour = parseInt(match[1], 10);
     const minute = parseInt(match[2], 10);
     const meridiem = match[3]?.toUpperCase();
-    if (meridiem === 'PM' && hour < 12)
-        hour += 12;
-    if (meridiem === 'AM' && hour === 12)
-        hour = 0;
+    if (meridiem === 'PM' && hour < 12) hour += 12;
+    if (meridiem === 'AM' && hour === 12) hour = 0;
+    
     const start = new Date();
     start.setHours(hour, minute, 0, 0);
     const end = new Date(start);
     end.setHours(start.getHours() + 3);
     const now = new Date();
-    if (now >= start && now <= end)
-        return 'Ongoing';
-    if (now > end)
-        return 'Completed';
+    
+    if (now >= start && now <= end) return 'Ongoing';
+    if (now > end) return 'Completed';
     return 'Upcoming';
 }
+
 export async function getKPIs() {
-    const [[studentsRow]] = await pool.query("SELECT COUNT(*) as count FROM students WHERE status != 'Deleted'");
-    const [[activeStudentsRow]] = await pool.query("SELECT COUNT(*) as count FROM students WHERE status = 'Active'");
-    const [[newAdmissionsRow]] = await pool.query(`SELECT COUNT(*) as count FROM students
-     WHERE status != 'Deleted'
-       AND YEAR(admission_date) = YEAR(CURDATE())
-       AND MONTH(admission_date) = MONTH(CURDATE())`);
-    const [[feesDueRow]] = await pool.query(`SELECT COALESCE(SUM(GREATEST(0, fees_total - fees_paid)), 0) as total
-     FROM students WHERE status != 'Deleted'`);
-    const [[feesCollectedRow]] = await pool.query(`SELECT COALESCE(SUM(fees_paid), 0) as total FROM students WHERE status != 'Deleted'`);
-    const [[studentsWithFeesDueRow]] = await pool.query(`SELECT COUNT(*) as count FROM students
-     WHERE status != 'Deleted' AND fees_paid < fees_total`);
-    const [[totalCoursesRow]] = await pool.query('SELECT COUNT(*) as count FROM courses');
-    const [[activeCoursesRow]] = await pool.query("SELECT COUNT(*) as count FROM courses WHERE status = 'Active'");
-    const [[upcomingBatchesRow]] = await pool.query("SELECT COUNT(*) as count FROM batches WHERE status = 'Upcoming'");
-    const [[ongoingBatchesRow]] = await pool.query("SELECT COUNT(*) as count FROM batches WHERE status = 'Ongoing'");
-    const [[facultyRow]] = await pool.query('SELECT COUNT(*) as count FROM faculty');
-    const [[revenueRow]] = await pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM payments');
+    const totalStudents = await Student.countDocuments({ status: { $ne: 'Deleted' } });
+    const activeStudents = await Student.countDocuments({ status: 'Active' });
+    
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const newAdmissionsThisMonth = await Student.countDocuments({ 
+        status: { $ne: 'Deleted' }, 
+        admission_date: { $gte: startOfMonth }
+    });
+    
+    const students = await Student.find({ status: { $ne: 'Deleted' } }).select('fees_total fees_paid').lean();
+    let feesDue = 0;
+    let feesCollected = 0;
+    let studentsWithFeesDue = 0;
+    
+    students.forEach(s => {
+        feesCollected += s.fees_paid;
+        if (s.fees_total > s.fees_paid) {
+            feesDue += (s.fees_total - s.fees_paid);
+            studentsWithFeesDue++;
+        }
+    });
+    
+    const totalCourses = await Course.countDocuments();
+    const activeCourses = await Course.countDocuments({ status: 'Active' });
+    const upcomingBatches = await Batch.countDocuments({ status: 'Upcoming' });
+    const ongoingBatches = await Batch.countDocuments({ status: 'Ongoing' });
+    const totalFaculty = await Faculty.countDocuments();
+    
+    const payments = await Payment.find().select('amount').lean();
+    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+    
     const todayClasses = await getTodayClasses();
-    const ongoingClassesNow = todayClasses.filter((c) => c.status === 'Ongoing').length;
+    const ongoingClassesNow = todayClasses.filter(c => c.status === 'Ongoing').length;
+    
     return {
-        totalStudents: studentsRow?.count || 0,
-        activeStudents: activeStudentsRow?.count || 0,
-        newAdmissionsThisMonth: newAdmissionsRow?.count || 0,
-        feesDue: parseFloat(feesDueRow?.total) || 0,
-        feesCollected: parseFloat(feesCollectedRow?.total) || 0,
-        studentsWithFeesDue: studentsWithFeesDueRow?.count || 0,
-        totalCourses: totalCoursesRow?.count || 0,
-        activeCourses: activeCoursesRow?.count || 0,
-        upcomingBatches: upcomingBatchesRow?.count || 0,
-        ongoingBatches: ongoingBatchesRow?.count || 0,
+        totalStudents,
+        activeStudents,
+        newAdmissionsThisMonth,
+        feesDue,
+        feesCollected,
+        studentsWithFeesDue,
+        totalCourses,
+        activeCourses,
+        upcomingBatches,
+        ongoingBatches,
         todayClassesCount: todayClasses.length,
         ongoingClassesNow,
-        totalFaculty: facultyRow?.count || 0,
-        totalRevenue: parseFloat(revenueRow?.total) || 0,
+        totalFaculty,
+        totalRevenue,
     };
 }
+
 export async function getEnrollmentTrend() {
-    const [rows] = await pool.query(`
-    SELECT DATE_FORMAT(admission_date, '%Y-%m') as month, COUNT(*) as count
-    FROM students
-    WHERE status != 'Deleted'
-    GROUP BY month
-    ORDER BY month ASC
-    LIMIT 12
-  `);
-    return rows;
+    const students = await Student.find({ status: { $ne: 'Deleted' } }).select('admission_date').lean();
+    const map = new Map();
+    students.forEach(s => {
+        if (!s.admission_date) return;
+        const d = new Date(s.admission_date);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        map.set(month, (map.get(month) || 0) + 1);
+    });
+    
+    return Array.from(map.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-12)
+        .map(([month, count]) => ({ month, count }));
 }
+
 export async function getFeeTrend() {
-    const [collectedRows] = await pool.query(`
-    SELECT DATE_FORMAT(pay_date, '%Y-%m') as month, COALESCE(SUM(amount), 0) as collected
-    FROM payments
-    GROUP BY month
-    ORDER BY month ASC
-    LIMIT 12
-  `);
-    const [dueRows] = await pool.query(`
-    SELECT DATE_FORMAT(admission_date, '%Y-%m') as month,
-           COALESCE(SUM(GREATEST(0, fees_total - fees_paid)), 0) as due
-    FROM students
-    WHERE status != 'Deleted'
-    GROUP BY month
-    ORDER BY month ASC
-    LIMIT 12
-  `);
-    const dueByMonth = new Map(dueRows.map((r) => [r.month, parseFloat(String(r.due)) || 0]));
-    const collectedByMonth = new Map(collectedRows.map((r) => [
-        r.month,
-        parseFloat(String(r.collected)) || 0,
-    ]));
+    const payments = await Payment.find().select('pay_date amount').lean();
+    const collectedByMonth = new Map();
+    payments.forEach(p => {
+        if (!p.pay_date) return;
+        const d = new Date(p.pay_date);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        collectedByMonth.set(month, (collectedByMonth.get(month) || 0) + p.amount);
+    });
+    
+    const students = await Student.find({ status: { $ne: 'Deleted' } }).select('admission_date fees_total fees_paid').lean();
+    const dueByMonth = new Map();
+    students.forEach(s => {
+        if (!s.admission_date) return;
+        const d = new Date(s.admission_date);
+        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const due = Math.max(0, s.fees_total - s.fees_paid);
+        dueByMonth.set(month, (dueByMonth.get(month) || 0) + due);
+    });
+    
     const months = [...new Set([...dueByMonth.keys(), ...collectedByMonth.keys()])].sort();
     return months.slice(-12).map((month) => ({
         month,
@@ -98,85 +123,115 @@ export async function getFeeTrend() {
         due: dueByMonth.get(month) ?? 0,
     }));
 }
+
 export async function getCourseEnrollment() {
-    const [rows] = await pool.query(`
-    SELECT c.name, COUNT(s.id) as count
-    FROM courses c
-    LEFT JOIN students s ON s.course_id = c.id AND s.status NOT IN ('Deleted', 'Inactive')
-    GROUP BY c.id, c.name
-    HAVING count > 0
-    ORDER BY count DESC
-  `);
-    return rows;
+    const courses = await Course.find().lean();
+    const students = await Student.find({ status: { $nin: ['Deleted', 'Inactive'] } }).select('course_id').lean();
+    
+    const countMap = {};
+    students.forEach(s => {
+        countMap[s.course_id] = (countMap[s.course_id] || 0) + 1;
+    });
+    
+    return courses
+        .map(c => ({ name: c.name, count: countMap[c.id] || 0 }))
+        .filter(c => c.count > 0)
+        .sort((a, b) => b.count - a.count);
 }
+
 export async function getTodayClasses() {
-    const [rows] = await pool.query(`
-    SELECT b.id, b.name, b.timing, c.name as courseName, f.name as facultyName
-    FROM batches b
-    JOIN courses c ON b.course_id = c.id
-    LEFT JOIN faculty f ON b.faculty_id = f.id
-    WHERE b.status = 'Ongoing'
-  `);
-    return rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        timing: r.timing,
-        courseName: r.courseName,
-        facultyName: r.facultyName ?? null,
-        status: inferClassStatus(r.timing),
+    const batches = await Batch.find({ status: 'Ongoing' })
+        .populate('course', 'name')
+        .populate('faculty', 'name')
+        .lean();
+        
+    return batches.map(b => ({
+        id: b.id,
+        name: b.name,
+        timing: b.timing,
+        courseName: b.course?.name,
+        facultyName: b.faculty?.name || null,
+        status: inferClassStatus(b.timing),
     }));
 }
-// --- Report Data Extractors ---
+
 export async function getStudentsReport() {
-    const [rows] = await pool.query(`
-    SELECT s.id, s.name, s.email, s.phone, s.status, s.admission_date as admissionDate,
-           c.name as courseName, b.name as batchName
-    FROM students s
-    JOIN courses c ON s.course_id = c.id
-    LEFT JOIN batches b ON s.batch_id = b.id
-    WHERE s.status != 'Deleted'
-    ORDER BY s.name ASC
-  `);
-    return rows;
+    const students = await Student.find({ status: { $ne: 'Deleted' } })
+        .populate('course', 'name')
+        .populate('batch', 'name')
+        .sort({ name: 1 })
+        .lean();
+        
+    return students.map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+        status: s.status,
+        admissionDate: s.admission_date,
+        courseName: s.course?.name,
+        batchName: s.batch?.name
+    }));
 }
+
 export async function getAdmissionsReport() {
-    const [rows] = await pool.query(`
-    SELECT admission_date as date, COUNT(*) as admissionsCount
-    FROM students
-    WHERE status != 'Deleted'
-    GROUP BY date
-    ORDER BY date DESC
-  `);
-    return rows;
+    const students = await Student.find({ status: { $ne: 'Deleted' } }).select('admission_date').lean();
+    const map = new Map();
+    
+    students.forEach(s => {
+        if (!s.admission_date) return;
+        // Strip time component for grouping
+        const dateKey = s.admission_date.toISOString().split('T')[0];
+        map.set(dateKey, (map.get(dateKey) || 0) + 1);
+    });
+    
+    return Array.from(map.entries())
+        .map(([date, admissionsCount]) => ({ date: new Date(date), admissionsCount }))
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
 }
+
 export async function getFeesReport() {
-    const [rows] = await pool.query(`
-    SELECT s.id as studentId, s.name as studentName,
-           s.fees_total as feesTotal, s.fees_paid as feesPaid,
-           (s.fees_total - s.fees_paid) as feesDue
-    FROM students s
-    WHERE s.status != 'Deleted'
-    ORDER BY feesDue DESC
-  `);
-    return rows;
+    const students = await Student.find({ status: { $ne: 'Deleted' } })
+        .select('id name fees_total fees_paid')
+        .lean();
+        
+    return students
+        .map(s => ({
+            studentId: s.id,
+            studentName: s.name,
+            feesTotal: s.fees_total,
+            feesPaid: s.fees_paid,
+            feesDue: s.fees_total - s.fees_paid
+        }))
+        .sort((a, b) => b.feesDue - a.feesDue);
 }
+
 export async function getAttendanceReportAll() {
-    const [rows] = await pool.query(`
-    SELECT ar.record_date as date, ar.status,
-           s.name as studentName, b.name as batchName
-    FROM attendance_records ar
-    JOIN students s ON ar.student_id = s.id
-    JOIN batches b ON ar.batch_id = b.id
-    ORDER BY ar.record_date DESC
-    LIMIT 500
-  `);
-    return rows;
+    const records = await AttendanceRecord.find()
+        .populate('student', 'name')
+        .populate('batch', 'name')
+        .sort({ record_date: -1 })
+        .limit(500)
+        .lean();
+        
+    return records.map(r => ({
+        date: r.record_date,
+        status: r.status,
+        studentName: r.student?.name,
+        batchName: r.batch?.name
+    }));
 }
+
 export async function getFacultyReport() {
-    const [rows] = await pool.query(`
-    SELECT id, name, subject, phone, email, salary, experience, qualification
-    FROM faculty
-    ORDER BY name ASC
-  `);
-    return rows;
+    const faculties = await Faculty.find().sort({ name: 1 }).lean();
+    return faculties.map(f => ({
+        id: f.id,
+        name: f.name,
+        subject: f.subject,
+        phone: f.phone,
+        email: f.email,
+        salary: f.salary,
+        experience: f.experience,
+        qualification: f.qualification
+    }));
 }

@@ -1,106 +1,129 @@
-import { pool } from '../../config/database.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/app-error.js';
+import { Payment } from '../../models/Payment.js';
+import { Student } from '../../models/Student.js';
+
 export async function getDueStudents() {
-    const [rows] = await pool.query(`
-    SELECT s.id as studentId, s.name as studentName, s.phone, s.email,
-           s.fees_total as feesTotal, s.fees_paid as feesPaid,
-           (s.fees_total - s.fees_paid) as feesDue,
-           s.course_id as courseId, c.name as courseName,
-           s.batch_id as batchId, b.name as batchName
-    FROM students s
-    JOIN courses c ON s.course_id = c.id
-    LEFT JOIN batches b ON s.batch_id = b.id
-    WHERE s.fees_total > s.fees_paid AND s.status != 'Deleted'
-    ORDER BY feesDue DESC
-  `);
-    return rows;
+    const students = await Student.find({ status: { $ne: 'Deleted' } })
+        .populate('course', 'name')
+        .populate('batch', 'name')
+        .lean();
+        
+    const due = students
+        .filter(s => s.fees_total > s.fees_paid)
+        .map(s => ({
+            studentId: s.id,
+            studentName: s.name,
+            phone: s.phone,
+            email: s.email,
+            feesTotal: s.fees_total,
+            feesPaid: s.fees_paid,
+            feesDue: s.fees_total - s.fees_paid,
+            courseId: s.course?.id || s.course_id,
+            courseName: s.course?.name,
+            batchId: s.batch?.id || s.batch_id,
+            batchName: s.batch?.name,
+        }))
+        .sort((a, b) => b.feesDue - a.feesDue);
+        
+    return due;
 }
+
 export async function getPaymentHistory() {
-    const [rows] = await pool.query(`
-    SELECT p.receipt, p.amount, p.mode, p.pay_date as payDate, p.remarks, p.created_at as createdAt,
-           p.student_id as studentId, s.name as studentName
-    FROM payments p
-    JOIN students s ON p.student_id = s.id
-    ORDER BY p.pay_date DESC, p.created_at DESC
-  `);
-    return rows;
+    const payments = await Payment.find()
+        .populate('creator', 'name')
+        .sort({ created_at: -1 })
+        .lean();
+
+    return payments.map(p => ({
+        id: p.id,
+        receiptNumber: p.receipt_number,
+        studentName: p.student?.name,
+        amount: p.amount,
+        paymentMethod: p.payment_method,
+        date: p.payment_date,
+        status: p.status,
+        collectorName: p.creator?.name,
+        studentId: p.student?.id || p.student_id,
+        studentName: p.student?.name,
+    }));
 }
+
 export async function getPaymentByReceipt(receipt) {
-    const [rows] = await pool.query(`
-    SELECT p.receipt, p.amount, p.mode, p.pay_date as payDate, p.remarks, p.created_at as createdAt,
-           p.student_id as studentId, s.name as studentName, s.email as studentEmail,
-           s.course_id as courseId, c.name as courseName,
-           u.name as collectorName
-    FROM payments p
-    JOIN students s ON p.student_id = s.id
-    JOIN courses c ON s.course_id = c.id
-    LEFT JOIN users u ON p.created_by = u.id
-    WHERE p.receipt = ?
-  `, [receipt]);
-    const list = rows;
-    return list[0] || null;
+    const p = await Payment.findOne({ receipt })
+        .populate({
+            path: 'student',
+            select: 'name email course',
+            populate: { path: 'course', select: 'name' }
+        })
+        .populate('creator', 'name')
+        .lean();
+        
+    if (!p) return null;
+    
+    return {
+        receipt: p.receipt,
+        amount: p.amount,
+        mode: p.mode,
+        payDate: p.pay_date,
+        remarks: p.remarks,
+        createdAt: p.created_at,
+        studentId: p.student?.id || p.student_id,
+        studentName: p.student?.name,
+        studentEmail: p.student?.email,
+        courseId: p.student?.course?.id || p.student?.course_id,
+        courseName: p.student?.course?.name,
+        collectorName: p.created_by?.name,
+    };
 }
+
 export async function collectFee(data, createdBy) {
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
-    try {
-        // 1. Lock student row for update
-        const [students] = await connection.query('SELECT id, name, fees_total, fees_paid FROM students WHERE id = ? AND status != \'Deleted\' FOR UPDATE', [data.studentId]);
-        const student = students[0];
-        if (!student) {
-            throw new NotFoundError(`Student with ID "${data.studentId}" not found`);
-        }
-        // Guard: prevent fees_paid from exceeding fees_total
-        const newTotal = parseFloat(student.fees_paid) + parseFloat(data.amount);
-        if (newTotal > parseFloat(student.fees_total)) {
-            throw new ValidationError(
-                `Payment of ${data.amount} would exceed the total fee of ${student.fees_total}. ` +
-                `Outstanding balance is ${(student.fees_total - student.fees_paid).toFixed(2)}.`
-            );
-        }
-        // 2. Generate unique receipt ID
-        let receiptId = '';
-        let isUnique = false;
-        let attempts = 0;
-        while (!isUnique && attempts < 5) {
-            receiptId = `RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
-            const [existing] = await connection.query('SELECT receipt FROM payments WHERE receipt = ?', [receiptId]);
-            if (existing.length === 0) {
-                isUnique = true;
-            }
-            attempts++;
-        }
-        if (!isUnique) {
-            throw new ConflictError('Failed to generate a unique receipt code. Please try again.');
-        }
-        // 3. Insert payment
-        await connection.query(`INSERT INTO payments (receipt, student_id, amount, mode, pay_date, remarks, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            receiptId,
-            data.studentId,
-            data.amount,
-            data.mode,
-            data.payDate,
-            data.remarks || null,
-            createdBy,
-        ]);
-        // 4. Update student's paid fees
-        await connection.query('UPDATE students SET fees_paid = fees_paid + ? WHERE id = ?', [data.amount, data.studentId]);
-        await connection.commit();
-        return {
-            receipt: receiptId,
-            studentId: data.studentId,
-            studentName: student.name,
-            amount: data.amount,
-            mode: data.mode,
-            payDate: data.payDate,
-        };
+    const student = await Student.findOne({ id: data.studentId, status: { $ne: 'Deleted' } });
+    if (!student) {
+        throw new NotFoundError(`Student with ID "${data.studentId}" not found`);
     }
-    catch (error) {
-        await connection.rollback();
-        throw error;
+    
+    const newTotal = student.fees_paid + data.amount;
+    if (newTotal > student.fees_total) {
+        throw new ValidationError(
+            `Payment of ${data.amount} would exceed the total fee of ${student.fees_total}. ` +
+            `Outstanding balance is ${(student.fees_total - student.fees_paid).toFixed(2)}.`
+        );
     }
-    finally {
-        connection.release();
+    
+    let receiptId = '';
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 5) {
+        receiptId = `RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+        const existing = await Payment.findOne({ receipt: receiptId });
+        if (!existing) {
+            isUnique = true;
+        }
+        attempts++;
     }
+    
+    if (!isUnique) {
+        throw new ConflictError('Failed to generate a unique receipt code. Please try again.');
+    }
+    
+    await Payment.create({
+        receipt: receiptId,
+        student_id: data.studentId,
+        amount: data.amount,
+        mode: data.mode,
+        pay_date: data.payDate,
+        remarks: data.remarks || null,
+        created_by: createdBy,
+    });
+    
+    await Student.updateOne({ id: data.studentId }, { $inc: { fees_paid: data.amount } });
+    
+    return {
+        receipt: receiptId,
+        studentId: data.studentId,
+        studentName: student.name,
+        amount: data.amount,
+        mode: data.mode,
+        payDate: data.payDate,
+    };
 }

@@ -1,85 +1,102 @@
-import { pool } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../shared/errors/app-error.js';
+import { Batch } from '../../models/Batch.js';
+import { Course } from '../../models/Course.js';
+import { Faculty } from '../../models/Faculty.js';
+import { Student } from '../../models/Student.js';
+
 export async function getAllBatches() {
-    const [rows] = await pool.query(`
-    SELECT b.id, b.name, b.timing, b.status, b.start_date, b.end_date,
-           b.course_id, c.name as course_name,
-           b.faculty_id, f.name as faculty_name
-    FROM batches b
-    JOIN courses c ON b.course_id = c.id
-    LEFT JOIN faculty f ON b.faculty_id = f.id
-    ORDER BY b.start_date DESC
-  `);
-    return rows;
+    const batches = await Batch.find()
+        .populate('course', 'name')
+        .populate('faculty', 'name')
+        .sort({ start_date: -1 })
+        .lean();
+        
+    return batches.map(b => ({
+        ...b,
+        course_name: b.course?.name,
+        faculty_name: b.faculty?.name,
+        course_id: b.course?.id || b.course_id,
+        faculty_id: b.faculty?.id || b.faculty_id
+    }));
 }
+
 export async function getBatchById(id) {
-    const [rows] = await pool.query(`
-    SELECT b.id, b.name, b.timing, b.status, b.start_date, b.end_date,
-           b.course_id, c.name as course_name,
-           b.faculty_id, f.name as faculty_name
-    FROM batches b
-    JOIN courses c ON b.course_id = c.id
-    LEFT JOIN faculty f ON b.faculty_id = f.id
-    WHERE b.id = ?
-  `, [id]);
-    const batches = rows;
-    return batches[0] || null;
+    const batch = await Batch.findOne({ id })
+        .populate('course', 'name')
+        .populate('faculty', 'name')
+        .lean();
+        
+    if (!batch) return null;
+    
+    return {
+        ...batch,
+        course_name: batch.course?.name,
+        faculty_name: batch.faculty?.name,
+        course_id: batch.course?.id || batch.course_id,
+        faculty_id: batch.faculty?.id || batch.faculty_id
+    };
 }
+
 export async function getBatchStudents(batchId) {
-    const [rows] = await pool.query('SELECT id, name, phone, email, status, photo_url FROM students WHERE batch_id = ? ORDER BY name ASC', [batchId]);
-    return rows;
+    return await Student.find({ batch_id: batchId })
+        .select('id name phone email status photo_url')
+        .sort({ name: 1 })
+        .lean();
 }
+
 export async function createBatch(data) {
     const existing = await getBatchById(data.id);
     if (existing) {
         throw new ConflictError(`Batch with ID "${data.id}" already exists`);
     }
-    // Verify course exists
-    const [courses] = await pool.query('SELECT id FROM courses WHERE id = ?', [data.courseId]);
-    if (courses.length === 0) {
+    
+    const course = await Course.findOne({ id: data.courseId });
+    if (!course) {
         throw new NotFoundError(`Course with ID "${data.courseId}" not found`);
     }
-    // Verify faculty exists if provided
+    
     if (data.facultyId) {
-        const [faculties] = await pool.query('SELECT id FROM faculty WHERE id = ?', [data.facultyId]);
-        if (faculties.length === 0) {
+        const faculty = await Faculty.findOne({ id: data.facultyId });
+        if (!faculty) {
             throw new NotFoundError(`Faculty with ID "${data.facultyId}" not found`);
         }
     }
-    await pool.query(`INSERT INTO batches (id, course_id, name, timing, faculty_id, status, start_date, end_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
-        data.id,
-        data.courseId,
-        data.name,
-        data.timing,
-        data.facultyId || null,
-        data.status,
-        data.startDate,
-        data.endDate,
-    ]);
+    
+    await Batch.create({
+        id: data.id,
+        course_id: data.courseId,
+        name: data.name,
+        timing: data.timing,
+        faculty_id: data.facultyId || null,
+        status: data.status,
+        start_date: data.startDate,
+        end_date: data.endDate,
+    });
+    
     return data;
 }
+
 export async function updateBatch(id, data) {
     const existing = await getBatchById(id);
     if (!existing) {
         throw new NotFoundError(`Batch with ID "${id}" not found`);
     }
-    // Verify course if updating
+    
     if (data.courseId) {
-        const [courses] = await pool.query('SELECT id FROM courses WHERE id = ?', [data.courseId]);
-        if (courses.length === 0) {
+        const course = await Course.findOne({ id: data.courseId });
+        if (!course) {
             throw new NotFoundError(`Course with ID "${data.courseId}" not found`);
         }
     }
-    // Verify faculty if updating
+    
     if (data.facultyId) {
-        const [faculties] = await pool.query('SELECT id FROM faculty WHERE id = ?', [data.facultyId]);
-        if (faculties.length === 0) {
+        const faculty = await Faculty.findOne({ id: data.facultyId });
+        if (!faculty) {
             throw new NotFoundError(`Faculty with ID "${data.facultyId}" not found`);
         }
     }
-    const fields = [];
-    const values = [];
+    
+    const updateData = {};
     const mapping = {
         courseId: 'course_id',
         name: 'name',
@@ -89,32 +106,34 @@ export async function updateBatch(id, data) {
         startDate: 'start_date',
         endDate: 'end_date',
     };
+    
     for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
             const dbCol = mapping[key];
             if (dbCol) {
-                fields.push(`${dbCol} = ?`);
-                values.push(value);
+                updateData[dbCol] = value;
             }
         }
     }
-    if (fields.length === 0) {
+    
+    if (Object.keys(updateData).length === 0) {
         return existing;
     }
-    values.push(id);
-    const query = `UPDATE batches SET ${fields.join(', ')} WHERE id = ?`;
-    await pool.query(query, values);
+    
+    await Batch.updateOne({ id }, { $set: updateData });
     return getBatchById(id);
 }
+
 export async function deleteBatch(id) {
     const existing = await getBatchById(id);
     if (!existing) {
         throw new NotFoundError(`Batch with ID "${id}" not found`);
     }
-    // Check if batch has enrolled students
-    const [students] = await pool.query('SELECT COUNT(*) as count FROM students WHERE batch_id = ?', [id]);
-    if (students[0]?.count > 0) {
+    
+    const studentsCount = await Student.countDocuments({ batch_id: id });
+    if (studentsCount > 0) {
         throw new ConflictError('Cannot delete batch: active students are enrolled in it');
     }
-    await pool.query('DELETE FROM batches WHERE id = ?', [id]);
+    
+    await Batch.deleteOne({ id });
 }

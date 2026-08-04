@@ -1,36 +1,54 @@
-import { pool } from '../../config/database.js';
 import { ForbiddenError } from '../../shared/errors/app-error.js';
+import { Notification } from '../../models/Notification.js';
+
 export async function getUserNotifications(userId) {
-    const [rows] = await pool.query(`SELECT id, type, title, message, is_read as isRead, created_at as createdAt 
-     FROM notifications 
-     WHERE user_id = ? OR user_id IS NULL 
-     ORDER BY created_at DESC`, [userId]);
-    return rows;
+    const notifs = await Notification.find({
+        $or: [{ user_id: userId }, { user_id: null }]
+    }).sort({ created_at: -1 }).lean();
+    
+    return notifs.map(n => ({
+        id: n._id.toString(), // Mongoose ID
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        isRead: n.is_read,
+        createdAt: n.created_at,
+    }));
 }
+
 export async function markNotificationRead(id, userId) {
-    await pool.query('UPDATE notifications SET is_read = 1 WHERE id = ? AND (user_id = ? OR user_id IS NULL)', [id, userId]);
+    await Notification.updateOne(
+        { _id: id, $or: [{ user_id: userId }, { user_id: null }] },
+        { $set: { is_read: true } }
+    );
 }
+
 export async function markAllNotificationsRead(userId) {
-    await pool.query('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL', [userId]);
+    await Notification.updateMany(
+        { $or: [{ user_id: userId }, { user_id: null }] },
+        { $set: { is_read: true } }
+    );
 }
+
 export async function deleteNotification(id, userId, userRole) {
-    // Fetch the notification first to check if it is a broadcast (user_id IS NULL)
-    const [rows] = await pool.query('SELECT user_id FROM notifications WHERE id = ?', [id]);
-    const notification = rows[0];
-    if (!notification) {
-        // Row doesn't exist or doesn't belong to this user — no-op (safe)
-        return;
-    }
-    const isBroadcast = notification.user_id === null;
+    const notif = await Notification.findById(id);
+    if (!notif) return;
+    
+    const isBroadcast = notif.user_id === null;
     if (isBroadcast && userRole !== 'admin' && userRole !== 'staff' && userRole !== 'super_admin') {
         throw new ForbiddenError('Only administrators can delete broadcast notifications');
     }
-    // Delete personal notification (user_id = userId) or broadcast (admin/staff only)
-    await pool.query(
-        'DELETE FROM notifications WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
-        [id, userId]
-    );
+    
+    if (notif.user_id === userId || isBroadcast) {
+        await Notification.deleteOne({ _id: id });
+    }
 }
+
 export async function createNotification(userId, type, title, message) {
-    await pool.query('INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)', [userId, type, title, message]);
+    await Notification.create({
+        user_id: userId,
+        type,
+        title,
+        message
+    });
 }

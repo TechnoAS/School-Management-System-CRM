@@ -1,46 +1,53 @@
-import { pool } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../shared/errors/app-error.js';
+import { Student } from '../../models/Student.js';
+import { Course } from '../../models/Course.js';
+import { Batch } from '../../models/Batch.js';
+
 export async function getStudentsList(filters) {
     const page = filters.page || 1;
     const limit = filters.limit || 10;
     const offset = (page - 1) * limit;
-    const whereClauses = ["s.status != 'Deleted'"];
-    const params = [];
+
+    const query = { status: { $ne: 'Deleted' } };
+
     if (filters.search) {
-        whereClauses.push('(s.name LIKE ? OR s.email LIKE ? OR s.phone LIKE ? OR s.id LIKE ?)');
-        const searchTerm = `%${filters.search}%`;
-        params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        const regex = new RegExp(filters.search, 'i');
+        query.$or = [
+            { name: regex },
+            { email: regex },
+            { phone: regex },
+            { id: regex }
+        ];
     }
+
     if (filters.course) {
-        whereClauses.push('s.course_id = ?');
-        params.push(filters.course);
+        query.course_id = filters.course;
     }
+
     if (filters.status) {
-        whereClauses.push('s.status = ?');
-        params.push(filters.status);
+        query.status = filters.status;
     }
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    // 1. Get count for pagination
-    const countQuery = `SELECT COUNT(*) as total FROM students s ${whereSql}`;
-    const [countRows] = await pool.query(countQuery, params);
-    const total = countRows[0]?.total || 0;
-    // 2. Get paginated students
-    const selectQuery = `
-    SELECT s.id, s.name, s.phone, s.email, s.status, s.admission_date, s.fees_total, s.fees_paid, s.photo_url,
-           s.course_id, c.name as course_name,
-           s.batch_id, b.name as batch_name
-    FROM students s
-    JOIN courses c ON s.course_id = c.id
-    LEFT JOIN batches b ON s.batch_id = b.id
-    ${whereSql}
-    ORDER BY s.created_at DESC
-    LIMIT ? OFFSET ?
-  `;
-    // express-mysql2 needs numbers for limit/offset, let's append to params
-    params.push(limit, offset);
-    const [students] = await pool.query(selectQuery, params);
+
+    const total = await Student.countDocuments(query);
+    const students = await Student.find(query)
+        .populate('course', 'name')
+        .populate('batch', 'name')
+        .sort({ created_at: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean();
+
+    // Map populated fields to match SQL output format for the controller
+    const formattedStudents = students.map(s => ({
+        ...s,
+        course_name: s.course?.name,
+        batch_name: s.batch?.name,
+        course_id: s.course?.id || s.course_id,
+        batch_id: s.batch?.id || s.batch_id
+    }));
+
     return {
-        students: students,
+        students: formattedStudents,
         meta: {
             total,
             page,
@@ -49,77 +56,87 @@ export async function getStudentsList(filters) {
         },
     };
 }
+
 export async function getStudentById(id) {
-    const [rows] = await pool.query(`
-    SELECT s.*, c.name as course_name, b.name as batch_name
-    FROM students s
-    JOIN courses c ON s.course_id = c.id
-    LEFT JOIN batches b ON s.batch_id = b.id
-    WHERE s.id = ? AND s.status != 'Deleted'
-  `, [id]);
-    const students = rows;
-    return students[0] || null;
+    const student = await Student.findOne({ id, status: { $ne: 'Deleted' } })
+        .populate('course', 'name')
+        .populate('batch', 'name')
+        .lean();
+        
+    if (!student) return null;
+    
+    return {
+        ...student,
+        course_name: student.course?.name,
+        batch_name: student.batch?.name,
+        course_id: student.course?.id || student.course_id,
+        batch_id: student.batch?.id || student.batch_id
+    };
 }
+
 export async function createStudent(data) {
     const existing = await getStudentById(data.id);
     if (existing) {
         throw new ConflictError(`Student with ID "${data.id}" already exists`);
     }
-    // Verify course
-    const [courses] = await pool.query('SELECT id FROM courses WHERE id = ?', [data.courseId]);
-    if (courses.length === 0) {
+
+    const course = await Course.findOne({ id: data.courseId });
+    if (!course) {
         throw new NotFoundError(`Course with ID "${data.courseId}" not found`);
     }
-    // Verify batch if provided
+
     if (data.batchId) {
-        const [batches] = await pool.query('SELECT id FROM batches WHERE id = ?', [data.batchId]);
-        if (batches.length === 0) {
+        const batch = await Batch.findOne({ id: data.batchId });
+        if (!batch) {
             throw new NotFoundError(`Batch with ID "${data.batchId}" not found`);
         }
     }
-    await pool.query(`INSERT INTO students (id, name, phone, email, course_id, batch_id, guardian, guardian_phone, address, admission_date, fees_total, fees_paid, status, dob, grade, photo_url, extra_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        data.id,
-        data.name,
-        data.phone || null,
-        data.email || null,
-        data.courseId,
-        data.batchId || null,
-        data.guardian || null,
-        data.guardianPhone || null,
-        data.address || null,
-        data.admissionDate,
-        data.feesTotal,
-        data.feesPaid,
-        data.status,
-        data.dob || null,
-        data.grade || null,
-        data.photoUrl || null,
-        data.extraData ? JSON.stringify(data.extraData) : null,
-    ]);
+
+    const student = new Student({
+        id: data.id,
+        name: data.name,
+        phone: data.phone || null,
+        email: data.email || null,
+        course_id: data.courseId,
+        batch_id: data.batchId || null,
+        guardian: data.guardian || null,
+        guardian_phone: data.guardianPhone || null,
+        address: data.address || null,
+        admission_date: data.admissionDate,
+        fees_total: data.feesTotal,
+        fees_paid: data.feesPaid,
+        status: data.status,
+        dob: data.dob || null,
+        grade: data.grade || null,
+        photo_url: data.photoUrl || null,
+        extra_data: data.extraData || null,
+    });
+
+    await student.save();
     return getStudentById(data.id);
 }
+
 export async function updateStudent(id, data) {
     const existing = await getStudentById(id);
     if (!existing) {
         throw new NotFoundError(`Student with ID "${id}" not found`);
     }
-    // Verify course if updating
+
     if (data.courseId) {
-        const [courses] = await pool.query('SELECT id FROM courses WHERE id = ?', [data.courseId]);
-        if (courses.length === 0) {
+        const course = await Course.findOne({ id: data.courseId });
+        if (!course) {
             throw new NotFoundError(`Course with ID "${data.courseId}" not found`);
         }
     }
-    // Verify batch if updating
+
     if (data.batchId) {
-        const [batches] = await pool.query('SELECT id FROM batches WHERE id = ?', [data.batchId]);
-        if (batches.length === 0) {
+        const batch = await Batch.findOne({ id: data.batchId });
+        if (!batch) {
             throw new NotFoundError(`Batch with ID "${data.batchId}" not found`);
         }
     }
-    const fields = [];
-    const values = [];
+
+    const updateData = {};
     const mapping = {
         name: 'name',
         phone: 'phone',
@@ -138,27 +155,28 @@ export async function updateStudent(id, data) {
         photoUrl: 'photo_url',
         extraData: 'extra_data',
     };
+
     for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
             const dbCol = mapping[key];
             if (dbCol) {
-                fields.push(`${dbCol} = ?`);
-                values.push(dbCol === 'extra_data' && value != null ? JSON.stringify(value) : value);
+                updateData[dbCol] = value;
             }
         }
     }
-    if (fields.length === 0) {
+
+    if (Object.keys(updateData).length === 0) {
         return existing;
     }
-    values.push(id);
-    const query = `UPDATE students SET ${fields.join(', ')} WHERE id = ?`;
-    await pool.query(query, values);
+
+    await Student.updateOne({ id }, { $set: updateData });
     return getStudentById(id);
 }
+
 export async function deleteStudentSoft(id) {
     const existing = await getStudentById(id);
     if (!existing) {
         throw new NotFoundError(`Student with ID "${id}" not found`);
     }
-    await pool.query("UPDATE students SET status = 'Deleted' WHERE id = ?", [id]);
+    await Student.updateOne({ id }, { $set: { status: 'Deleted' } });
 }

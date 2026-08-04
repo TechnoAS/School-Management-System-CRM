@@ -1,52 +1,52 @@
-import { pool } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../shared/errors/app-error.js';
+import { Course } from '../../models/Course.js';
+import { Batch } from '../../models/Batch.js';
+import { Student } from '../../models/Student.js';
+
 export async function getAllCourses() {
-    const [rows] = await pool.query('SELECT * FROM courses ORDER BY created_at DESC');
-    return rows;
+    return await Course.find().sort({ created_at: -1 }).lean();
 }
+
 export async function getCourseById(id) {
-    const [rows] = await pool.query('SELECT * FROM courses WHERE id = ?', [id]);
-    const courses = rows;
-    return courses[0] || null;
+    const course = await Course.findOne({ id }).lean();
+    return course || null;
 }
+
 export async function getCourseStats(id) {
-    const [[batchRow]] = await pool.query("SELECT COUNT(*) as activeBatches FROM batches WHERE course_id = ? AND status = 'Ongoing'", [id]);
-    const [[studentRow]] = await pool.query("SELECT COUNT(*) as activeStudents FROM students WHERE course_id = ? AND status = 'Active'", [id]);
-    return {
-        activeBatches: batchRow?.activeBatches || 0,
-        activeStudents: studentRow?.activeStudents || 0,
-    };
+    const activeBatches = await Batch.countDocuments({ course_id: id, status: 'Ongoing' });
+    const activeStudents = await Student.countDocuments({ course_id: id, status: 'Active' });
+    return { activeBatches, activeStudents };
 }
+
 export async function createCourse(data) {
     const existing = await getCourseById(data.id);
     if (existing) {
         throw new ConflictError(`Course with ID "${data.id}" already exists`);
     }
-    await pool.query(
-        'INSERT INTO courses (id, name, duration, fees, description, status, start_date, end_date, logo_url, banner_url, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-            data.id,
-            data.name,
-            data.duration,
-            data.fees,
-            data.description || null,
-            data.status,
-            data.startDate || null,
-            data.endDate || null,
-            data.logoUrl || null,
-            data.bannerUrl || null,
-            data.extraData ? JSON.stringify(data.extraData) : null,
-        ]
-    );
+    const course = new Course({
+        id: data.id,
+        name: data.name,
+        duration: data.duration,
+        fees: data.fees,
+        description: data.description || null,
+        status: data.status,
+        start_date: data.startDate || null,
+        end_date: data.endDate || null,
+        logo_url: data.logoUrl || null,
+        banner_url: data.bannerUrl || null,
+        extra_data: data.extraData || null,
+    });
+    await course.save();
     return data;
 }
+
 export async function updateCourse(id, data) {
     const existing = await getCourseById(id);
     if (!existing) {
         throw new NotFoundError(`Course with ID "${id}" not found`);
     }
-    const fields = [];
-    const values = [];
+    
+    const updateData = {};
     const mapping = {
         name: 'name',
         duration: 'duration',
@@ -59,37 +59,39 @@ export async function updateCourse(id, data) {
         bannerUrl: 'banner_url',
         extraData: 'extra_data',
     };
+    
     for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
             const dbCol = mapping[key];
             if (dbCol) {
-                fields.push(`${dbCol} = ?`);
-                values.push(dbCol === 'extra_data' && value != null ? JSON.stringify(value) : value);
+                updateData[dbCol] = value;
             }
         }
     }
-    if (fields.length === 0) {
+    
+    if (Object.keys(updateData).length === 0) {
         return existing;
     }
-    values.push(id);
-    const query = `UPDATE courses SET ${fields.join(', ')} WHERE id = ?`;
-    await pool.query(query, values);
-    return getCourseById(id);
+    
+    await Course.updateOne({ id }, { $set: updateData });
+    return await getCourseById(id);
 }
+
 export async function deleteCourse(id) {
     const existing = await getCourseById(id);
     if (!existing) {
         throw new NotFoundError(`Course with ID "${id}" not found`);
     }
-    // Check if course has any batches
-    const [batches] = await pool.query('SELECT COUNT(*) as count FROM batches WHERE course_id = ?', [id]);
-    if (batches[0]?.count > 0) {
+    
+    const batchesCount = await Batch.countDocuments({ course_id: id });
+    if (batchesCount > 0) {
         throw new ConflictError('Cannot delete course: active batches are linked to it');
     }
-    // Check if course has any students
-    const [students] = await pool.query('SELECT COUNT(*) as count FROM students WHERE course_id = ?', [id]);
-    if (students[0]?.count > 0) {
+    
+    const studentsCount = await Student.countDocuments({ course_id: id });
+    if (studentsCount > 0) {
         throw new ConflictError('Cannot delete course: enrolled students are linked to it');
     }
-    await pool.query('DELETE FROM courses WHERE id = ?', [id]);
+    
+    await Course.deleteOne({ id });
 }

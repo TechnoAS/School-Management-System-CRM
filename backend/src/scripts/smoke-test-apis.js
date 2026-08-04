@@ -83,7 +83,7 @@ async function main() {
         { name: 'List students', method: 'GET', path: '/students?page=1&limit=10' },
         { name: 'Get student', method: 'GET', path: '/students/STU-001' },
         { name: 'Attendance', method: 'GET', path: '/attendance?batchId=BAT-001&date=2024-03-10' },
-        { name: 'Attendance report', method: 'GET', path: '/attendance/report?batchId=BAT-001&month=3&year=2024' },
+        { name: 'Attendance report', method: 'GET', path: '/attendance/report?batchId=BAT-001&month=2024-03' },
         { name: 'Due fees', method: 'GET', path: '/fees/due' },
         { name: 'Payments', method: 'GET', path: '/payments' },
         { name: 'Payment receipt', method: 'GET', path: '/payments/RCP-2024-0892' },
