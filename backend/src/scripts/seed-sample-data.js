@@ -76,7 +76,7 @@ async function seedData() {
         await Batch.findOneAndUpdate({ id: batchId1 }, {
             id: batchId1,
             course_id: courseId1,
-            faculty_id: facultyId1,
+            faculty_id: 'FAC-001',
             name: 'MERN Morning Batch',
             timing: '09:00 AM',
             status: 'Ongoing',
